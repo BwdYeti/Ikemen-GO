@@ -16,11 +16,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Windblade-GR01/go-openal/openal"
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/speaker"
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/ikemen-engine/go-openal/openal"
 	"github.com/sqweek/dialog"
 	lua "github.com/yuin/gopher-lua"
 )
