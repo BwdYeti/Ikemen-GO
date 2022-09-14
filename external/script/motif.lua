@@ -4,6 +4,8 @@
 local width = math.max(config.GameWidth, main.SP_Localcoord[1])
 local height = math.max(config.GameHeight, main.SP_Localcoord[2])
 
+local verInfo = main.f_fileRead("external/script/version", "r")
+
 --This pre-made table (3/4 of the whole file) contains all default values used in screenpack. New table from parsed DEF file is merged on top of this one.
 --This is important because there are more params available in Ikemen. Whole screenpack code refers to these values.
 local motif =
@@ -131,7 +133,7 @@ local motif =
 		footer3_font = {'default-3x5.def', 0, -1, 191, 191, 191}, --Ikemen feature
 		footer3_font_scale = {1.0, 1.0}, --Ikemen feature
 		footer3_font_height = -1, --Ikemen feature
-		footer3_text = 'v0.96.2', --Ikemen feature
+		footer3_text = verInfo, --Ikemen feature
 		footer_overlay_window = {0, main.SP_Localcoord[2] - 7, main.SP_Localcoord[1] - 1, main.SP_Localcoord[2] - 1}, --Ikemen feature (0, 233, 319, 239)
 		footer_overlay_col = {0, 0, 64}, --Ikemen feature
 		footer_overlay_alpha = {255, 100}, --Ikemen feature
@@ -384,6 +386,7 @@ local motif =
 		--p<pn>_member<num>_face_scale = {1.0, 1.0}, --Ikemen feature
 		--p<pn>_member<num>_face_slide_speed = {0, 0}, --Ikemen feature
 		--p<pn>_member<num>_face_slide_dist = {0, 0}, --Ikemen feature
+		name_random_text = 'Random', --Ikemen feature
 		p1_name_offset = {0, 0},
 		p1_name_font = {-1, 4, 1, 255, 255, 255},
 		p1_name_font_scale = {1.0, 1.0},
@@ -1348,6 +1351,7 @@ local motif =
 		--menu_itemname_inputdefault = 'Default', --Ikemen feature
 		--menu_itemname_players = 'Players', --Ikemen feature
 		--menu_itemname_debugkeys = 'Debug Keys', --Ikemen feature
+		--menu_itemname_debugmode = 'Debug Mode', --Ikemen feature
 		--menu_itemname_helpermax = 'HelperMax', --Ikemen feature
 		--menu_itemname_projectilemax = 'PlayerProjectileMax', --Ikemen feature
 		--menu_itemname_explodmax = 'ExplodMax', --Ikemen feature
@@ -2195,6 +2199,7 @@ function motif.setBaseOptionInfo()
 	motif.option_info.menu_itemname_menuengine = "Engine Settings"
 	motif.option_info.menu_itemname_menuengine_players = "Players"
 	motif.option_info.menu_itemname_menuengine_debugkeys = "Debug Keys"
+	motif.option_info.menu_itemname_menuengine_debugmode = "Debug Mode"
 	motif.option_info.menu_itemname_menuengine_empty = ""
 	motif.option_info.menu_itemname_menuengine_helpermax = "HelperMax"
 	motif.option_info.menu_itemname_menuengine_projectilemax = "PlayerProjectileMax"
@@ -2307,6 +2312,7 @@ function motif.setBaseOptionInfo()
 		"menuengine",
 		"menuengine_players",
 		"menuengine_debugkeys",
+		"menuengine_debugmode",
 		"menuengine_empty",
 		"menuengine_helpermax",
 		"menuengine_projectilemax",
@@ -2675,7 +2681,7 @@ main.f_loadingRefresh()
 for k, _ in pairs(motif) do
 	if k:match('bgdef$') then
 		--optional sff paths and data
-		if motif[k].spr ~= '' then
+		if motif[k].spr ~= nil and motif[k].spr ~= '' then
 			motif[k].spr = main.f_filePath(motif[k].spr, motif.fileDir, 'data/')
 			motif[k].spr_data = sffNew(motif[k].spr)
 			main.f_loadingRefresh()

@@ -82,7 +82,7 @@ func systemScriptInit(l *lua.LState) {
 				return false
 			}
 			sk := *NewShortcutKey(k, boolArg(l, 2), boolArg(l, 3), boolArg(l, 4))
-			sys.shortcutScripts[sk] = &ShortcutScript{Pause: boolArg(l, 5), Script: strArg(l, 6)}
+			sys.shortcutScripts[sk] = &ShortcutScript{Pause: boolArg(l, 5), DebugKey: boolArg(l, 6), Script: strArg(l, 7)}
 			return true
 		}()))
 		return 1
@@ -1032,7 +1032,8 @@ func systemScriptInit(l *lua.LState) {
 		}
 		lines, i, info, files, name, sound := SplitAndTrim(str, "\n"), 0, true, true, "", ""
 		for i < len(lines) {
-			is, name, _ := ReadIniSection(lines, &i)
+			var is IniSection
+			is, name, _ = ReadIniSection(lines, &i)
 			switch name {
 			case "info":
 				if info {
@@ -1716,6 +1717,10 @@ func systemScriptInit(l *lua.LState) {
 		return 0
 	})
 	luaRegister(l, "setAllowDebugKeys", func(l *lua.LState) int {
+		sys.allowDebugKeys = boolArg(l, 1)
+		return 0
+	})
+	luaRegister(l, "setAllowDebugMode", func(l *lua.LState) int {
 		d := boolArg(l, 1)
 		if !d {
 			if sys.clsnDraw {
@@ -1725,7 +1730,7 @@ func systemScriptInit(l *lua.LState) {
 				sys.debugDraw = false
 			}
 		}
-		sys.allowDebugKeys = d
+		sys.allowDebugMode = d
 		return 0
 	})
 	luaRegister(l, "setAudioDucking", func(l *lua.LState) int {
@@ -2271,6 +2276,9 @@ func systemScriptInit(l *lua.LState) {
 		return 0
 	})
 	luaRegister(l, "toggleClsnDraw", func(*lua.LState) int {
+		if !sys.allowDebugMode {
+			return 0
+		}
 		if l.GetTop() >= 1 {
 			sys.clsnDraw = boolArg(l, 1)
 		} else {
@@ -2279,6 +2287,9 @@ func systemScriptInit(l *lua.LState) {
 		return 0
 	})
 	luaRegister(l, "toggleDebugDraw", func(*lua.LState) int {
+		if !sys.allowDebugMode {
+			return 0
+		}
 		if l.GetTop() >= 1 {
 			sys.debugDraw = !sys.debugDraw
 			return 0
@@ -3652,11 +3663,11 @@ func triggerFunctions(l *lua.LState) {
 		return 1
 	})
 	luaRegister(l, "receivedhits", func(*lua.LState) int {
-		l.Push(lua.LNumber(sys.debugWC.getcombo))
+		l.Push(lua.LNumber(sys.debugWC.receivedHits))
 		return 1
 	})
 	luaRegister(l, "receiveddamage", func(*lua.LState) int {
-		l.Push(lua.LNumber(sys.debugWC.getcombodmg))
+		l.Push(lua.LNumber(sys.debugWC.comboDmg))
 		return 1
 	})
 	luaRegister(l, "redlife", func(*lua.LState) int {
@@ -3762,6 +3773,14 @@ func triggerFunctions(l *lua.LState) {
 		l.Push(lua.LNumber(sys.gameSpeed * sys.accel * 100))
 		return 1
 	})
+	luaRegister(l, "lasthitter", func(*lua.LState) int {
+		tn := int(numArg(l, 1))
+		if tn < 1 || tn > 2 {
+			l.RaiseError("\nInvalid team side: %v\n", tn)
+		}
+		l.Push(lua.LNumber(sys.lastHitter[tn - 1] + 1))
+		return 1
+	})
 	luaRegister(l, "localcoord", func(*lua.LState) int {
 		l.Push(lua.LNumber(sys.debugWC.localcoord))
 		return 1
@@ -3824,17 +3843,12 @@ func triggerFunctions(l *lua.LState) {
 	})
 	luaRegister(l, "winnerteam", func(*lua.LState) int {
 		var winp int32 = -1
-		/*if sys.matchOver() && sys.roundOver() {
+		if !sys.endMatch && (sys.winTeam >= 0 || sys.debugWC.roundState() >= 3) {
 			w1 := sys.wins[0] >= sys.matchWins[0]
 			w2 := sys.wins[1] >= sys.matchWins[1]
 			if w1 != w2 {
 				winp = Btoi(w1) + Btoi(w2)*2
 			}
-		} else if sys.winTeam != -1 {
-			winp = int32(sys.winTeam) + 1
-		}*/
-		if !sys.endMatch && (sys.winTeam >= 0 || sys.debugWC.roundState() >= 3) {
-			winp = int32(sys.winTeam) + 1
 		}
 		l.Push(lua.LNumber(winp))
 		return 1

@@ -1521,36 +1521,40 @@ const (
 )
 
 type CharSystemVar struct {
-	airJumpCount  int32
-	hitCount      int32
-	uniqHitCount  int32
-	pauseMovetime int32
-	superMovetime int32
-	bindTime      int32
-	bindToId      int32
-	bindPos       [2]float32
-	bindFacing    float32
-	hitPauseTime  int32
-	angle         float32
-	angleScalse   [2]float32
-	alpha         [2]int32
-	recoverTime   int32
-	systemFlag    SystemCharFlag
-	specialFlag   CharSpecialFlag
-	sprPriority   int32
-	getcombo      int32
-	veloff        float32
-	width, edge   [2]float32
-	attackMul     float32
+	airJumpCount     int32
+	hitCount         int32
+	uniqHitCount     int32
+	pauseMovetime    int32
+	superMovetime    int32
+	bindTime         int32
+	bindToId         int32
+	bindPos          [2]float32
+	bindFacing       float32
+	hitPauseTime     int32
+	angle            float32
+	angleScalse      [2]float32
+	alpha            [2]int32
+	recoverTime      int32
+	systemFlag       SystemCharFlag
+	specialFlag      CharSpecialFlag
+	sprPriority      int32
+	receivedHits     int32
+	fakeReceivedHits int32
+	velOff           float32
+	width, edge      [2]float32
+	attackMul        float32
 	// Defense parameters
 	superDefenseMul float32
 	fallDefenseMul  float32
 	customDefense   float32
 	finalDefense    float64
 
-	counterHit  bool
-	firstAttack bool
-	getcombodmg int32
+	counterHit   bool
+	firstAttack  bool
+	comboDmg     int32
+	fakeComboDmg int32
+
+	fakeCombo bool
 }
 
 type Char struct {
@@ -3167,8 +3171,11 @@ func (c *Char) selfState(no, anim, readplayerid, ctrl int32, ffx bool) {
 func (c *Char) destroy() {
 	if c.helperIndex > 0 {
 		c.exitTarget(true)
-		c.getcombo = 0
-		c.getcombodmg = 0
+		c.receivedHits = 0
+		c.comboDmg = 0
+		c.fakeComboDmg = 0
+		c.fakeReceivedHits = 0
+		c.fakeCombo = false
 		for _, tid := range c.targets {
 			if t := sys.playerID(tid); t != nil {
 				t.gethitBindClear()
@@ -3531,18 +3538,26 @@ func (c *Char) hitAdd(h int32) {
 	if len(c.targets) > 0 {
 		for _, tid := range c.targets {
 			if t := sys.playerID(tid); t != nil {
-				t.getcombo += h
+				t.receivedHits += h
+				t.fakeReceivedHits += h
 				if c.teamside != -1 {
 					sys.lifebar.co[c.teamside].combo += h
+					sys.lifebar.co[c.teamside].fakeCombo += h
 				}
 			}
 		}
 	} else if c.teamside != -1 {
 		//in mugen HitAdd increases combo count even without targets
 		for i, p := range sys.getPlayers() {
-			if p != nil && c.teamside == ^i&1 && (p.getcombo != 0 || p.ss.moveType == MT_H) {
-				p.getcombo += h
-				sys.lifebar.co[c.teamside].combo += h
+			if p != nil && c.teamside == ^i&1 {
+				if p.receivedHits != 0 || p.ss.moveType == MT_H {
+					p.receivedHits += h
+					sys.lifebar.co[c.teamside].combo += h
+				}
+				if p.fakeReceivedHits != 0 || p.ss.moveType == MT_H {
+					p.fakeReceivedHits += h
+					sys.lifebar.co[c.teamside].fakeCombo += h
+				}
 			}
 		}
 	}
@@ -4063,7 +4078,8 @@ func (c *Char) lifeAdd(add float64, kill, absolute bool) {
 			add = min
 		}
 		if add < 0 {
-			c.getcombodmg -= int32(add)
+			c.comboDmg -= int32(add)
+			c.fakeComboDmg -= int32(add)
 		}
 		c.lifeSet(c.life + int32(add))
 	}
@@ -4098,6 +4114,9 @@ func (c *Char) lifeSet(life int32) {
 			c.life = 1
 		}
 		c.redLife = 0
+	}
+	if c.teamside != c.ghv.playerNo&1 && c.teamside != -1 && c.ghv.playerNo < MaxSimul*2 { //attacker and receiver from opposite teams
+		sys.lastHitter[^c.playerNo&1] = c.ghv.playerNo
 	}
 }
 func (c *Char) setPower(pow int32) {
@@ -4753,11 +4772,11 @@ func (c *Char) posUpdate() {
 	}
 	if c.sf(CSF_posfreeze) {
 		if nobind[0] {
-			c.setPosX(c.oldPos[0] + c.veloff)
+			c.setPosX(c.oldPos[0] + c.velOff)
 		}
 	} else {
 		if nobind[0] {
-			c.setPosX(c.oldPos[0] + c.vel[0]*c.facing + c.veloff)
+			c.setPosX(c.oldPos[0] + c.vel[0]*c.facing + c.velOff)
 		}
 		if nobind[1] {
 			c.setPosY(c.oldPos[1] + c.vel[1])
@@ -4774,9 +4793,9 @@ func (c *Char) posUpdate() {
 			c.gravity()
 		}
 	}
-	c.veloff *= 0.7
-	if AbsF(c.veloff) < 1 {
-		c.veloff = 0
+	c.velOff *= 0.7
+	if AbsF(c.velOff) < 1 {
+		c.velOff = 0
 	}
 }
 func (c *Char) addTarget(id int32) {
@@ -5337,8 +5356,11 @@ func (c *Char) update(cvmin, cvmax,
 			}
 			if c.ss.moveType == MT_H {
 				if c.ghv.guarded {
-					c.getcombo = 0
-					c.getcombodmg = 0
+					c.receivedHits = 0
+					c.comboDmg = 0
+					c.fakeCombo = false
+					c.fakeReceivedHits = 0
+					c.fakeComboDmg = 0
 				}
 				if c.ghv.hitshaketime > 0 {
 					c.ghv.hitshaketime--
@@ -5349,6 +5371,9 @@ func (c *Char) update(cvmin, cvmax,
 				if c.ghv.fallf {
 					c.fallTime++
 				}
+				// So to explain because this is did confuse the future to me.
+				// Here we set up the extra frames the combo is gonna have.
+				// Once the combo becomes non-valid and becomes false this start to count down.
 				c.comboExtraFrameWindow = sys.comboExtraFrameWindow
 			} else {
 				if c.hittmp > 0 {
@@ -5361,14 +5386,19 @@ func (c *Char) update(cvmin, cvmax,
 				c.ghv.fallf = false
 				c.ghv.fallcount = 0
 				c.ghv.hitid = -1
+				// Mugen has a combo delay in lefebar were is active for 1 frame more than it should.
 				if c.comboExtraFrameWindow <= 0 {
 					if !c.scf(SCF_dizzy) {
-						c.getcombo = 0
-						c.getcombodmg = 0
+						c.fakeReceivedHits = 0
+						c.fakeComboDmg = 0
+						c.fakeCombo = false
 					}
 				} else {
+					c.fakeCombo = true
 					c.comboExtraFrameWindow--
 				}
+				c.receivedHits = 0
+				c.comboDmg = 0
 				c.ghv.attr = 0
 				c.ghv.dizzypoints = 0
 				c.ghv.guardpoints = 0
@@ -5492,11 +5522,12 @@ func (c *Char) tick() {
 		if c.stchtmp {
 			c.ss.prevno = 0
 		} else if c.ss.stateType == ST_L {
-			if c.movedY {
-				c.changeStateEx(5020, pn, -1, 0, false)
-			} else {
-				c.changeStateEx(5080, pn, -1, 0, false)
-			}
+			// TODO: ask NeatUnsou for reasoning behind movedY flag: https://github.com/Windblade-GR01/Ikemen-GO/issues/272
+			//if c.movedY {
+			//	c.changeStateEx(5020, pn, -1, 0, false)
+			//} else {
+			c.changeStateEx(5080, pn, -1, 0, false)
+			//}
 		} else if c.ghv.guarded && (c.ghv.damage < c.life || sys.sf(GSF_noko)) {
 			switch c.ss.stateType {
 			case ST_S:
@@ -5997,11 +6028,13 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 						ghv.hittime = c.scaleHit(hd.down_hittime, getter.id, 1)
 						ghv.ctrltime = hd.down_hittime
 						ghv.xvel = hd.down_velocity[0] * c.localscl / getter.localscl
-						if getter.movedY {
-							ghv.yvel = hd.air_velocity[1] * c.localscl / getter.localscl
-						} else {
-							ghv.yvel = hd.down_velocity[1] * c.localscl / getter.localscl
-						}
+						// TODO: ask NeatUnsou for reasoning behind movedY flag: https://github.com/Windblade-GR01/Ikemen-GO/issues/272
+						//if getter.movedY {
+						//	ghv.yvel = hd.air_velocity[1] * c.localscl / getter.localscl
+						//} else {
+						ghv.yvel = hd.down_velocity[1] * c.localscl / getter.localscl
+						//}
+						ghv.fallf = hd.ground_fall
 						if !hd.down_bounce {
 							ghv.fall.xvelocity = float32(math.NaN())
 							ghv.fall.yvelocity = 0
@@ -6369,9 +6402,11 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 				sys.envShake.phase = hd.envshake_phase
 				sys.envShake.setDefPhase()
 			}
-			getter.getcombo += hd.numhits * hits
+			getter.receivedHits += hd.numhits * hits
+			getter.fakeReceivedHits += hd.numhits * hits
 			if c.teamside != -1 {
 				sys.lifebar.co[c.teamside].combo += hd.numhits * hits
+				sys.lifebar.co[c.teamside].fakeCombo += hd.numhits * hits
 			}
 			//getter.getcombodmg += hd.hitdamage
 			if hitType > 0 && !proj && getter.sf(CSF_screenbound) &&
@@ -6379,11 +6414,11 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 					c.facing > 0 && getter.pos[0]*getter.localscl >= xma) {
 				switch getter.ss.stateType {
 				case ST_S, ST_C:
-					c.veloff = hd.ground_cornerpush_veloff * c.facing
+					c.velOff = hd.ground_cornerpush_veloff * c.facing
 				case ST_A:
-					c.veloff = hd.air_cornerpush_veloff * c.facing
+					c.velOff = hd.air_cornerpush_veloff * c.facing
 				case ST_L:
-					c.veloff = hd.down_cornerpush_veloff * c.facing
+					c.velOff = hd.down_cornerpush_veloff * c.facing
 				}
 			}
 		} else {
@@ -6392,9 +6427,9 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 					c.facing > 0 && getter.pos[0]*getter.localscl >= xma) {
 				switch getter.ss.stateType {
 				case ST_S, ST_C:
-					c.veloff = hd.guard_cornerpush_veloff * c.facing
+					c.velOff = hd.guard_cornerpush_veloff * c.facing
 				case ST_A:
-					c.veloff = hd.airguard_cornerpush_veloff * c.facing
+					c.velOff = hd.airguard_cornerpush_veloff * c.facing
 				}
 			}
 		}
