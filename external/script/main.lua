@@ -11,7 +11,7 @@ if main.flags['-config'] == nil then main.flags['-config'] = 'save/config.json' 
 if main.flags['-stats'] == nil then main.flags['-stats'] = 'save/stats.json' end
 
 --One-time load of the json routines
-json = (loadfile 'external/script/dkjson.lua')()
+json = (loadfile 'external/script/json.lua')()
 
 --;===========================================================
 --; COMMON FUNCTIONS
@@ -106,7 +106,7 @@ function main.f_commandAdd(name, cmd, tim, buf)
 	end
 	main.t_commands[name] = 0
 end
-main.f_commandAdd("KonamiCode", "~U,U,D,D,B,F,B,F,b,a,s", 300, 1)
+--main.f_commandAdd("KonamiCode", "~U,U,D,D,B,F,B,F,b,a,s", 300, 1)
 
 --sends inputs to buffer
 function main.f_cmdInput()
@@ -216,19 +216,6 @@ function main.f_fileExists(file)
 	return false
 end
 
---add missing relative file path
-function main.f_filePath(path, dir, defaultDir)
-	path = path:gsub('\\', '/')
-	if not path:lower():match('^data/') then
-		if main.f_fileExists(dir .. path) then
-			return dir .. path
-		elseif main.f_fileExists(defaultDir .. path) then
-			return defaultDir .. path
-		end
-	end
-	return path
-end
-
 --prints "t" table content into "toFile" file
 function main.f_printTable(t, toFile)
 	local txt = ''
@@ -315,7 +302,8 @@ if main.flags['-ailevel'] ~= nil then
 	config.Difficulty = math.max(1, math.min(tonumber(main.flags['-ailevel']), 8))
 end
 if main.flags['-speed'] ~= nil then
-	config.GameSpeed = math.max(10, math.min(tonumber(main.flags['-speed']), 200))
+	--config.GameSpeed = math.max(10, math.min(tonumber(main.flags['-speed']), 200))
+	setGameSpeed(math.max(10, math.min(tonumber(main.flags['-speed']), 200)))
 end
 if main.flags['-speedtest'] ~= nil then
 	setGameSpeed(100)
@@ -401,8 +389,8 @@ function text:create(t)
 	if t.window == nil then t.window = {} end
 	t.window[1] = t.window[1] or 0
 	t.window[2] = t.window[2] or 0
-	t.window[3] = t.window[3] or math.max(config.GameWidth, motif.info.localcoord[1])
-	t.window[4] = t.window[4] or math.max(config.GameHeight, motif.info.localcoord[2])
+	t.window[3] = t.window[3] or motif.info.localcoord[1]
+	t.window[4] = t.window[4] or motif.info.localcoord[2]
 	t.defsc = t.defsc or false
 	t.ti = textImgNew()
 	setmetatable(t, self)
@@ -582,15 +570,15 @@ function main.f_createTextImg(t, prefix, mod)
 		bank =   t[prefix .. '_font'][2],
 		align =  t[prefix .. '_font'][3],
 		text =   t[prefix .. '_text'],
-		x =      (t[prefix .. '_offset'][1] or 0) + (mod.addX or 0),
-		y =      (t[prefix .. '_offset'][2] or 0) + (mod.addY or 0),
-		scaleX = t[prefix .. '_font_scale'][1],
-		scaleY = t[prefix .. '_font_scale'][2],
+		x =      (t[prefix .. '_offset'][1] or 0) + (mod.x or 0),
+		y =      (t[prefix .. '_offset'][2] or 0) + (mod.y or 0),
+		scaleX = (t[prefix .. '_font_scale'][1] or 1) * (mod.scaleX or 1),
+		scaleY = (t[prefix .. '_font_scale'][2] or 1) * (mod.scaleY or 1),
 		r =      t[prefix .. '_font'][4],
 		g =      t[prefix .. '_font'][5],
 		b =      t[prefix .. '_font'][6],
 		height = t[prefix .. '_font_height'],
-		--window = t[prefix .. '_window'],
+		window = t[prefix .. '_window'],
 		defsc = mod.defsc or false,
 	})
 end
@@ -629,7 +617,7 @@ end
 
 --animDraw at specified coordinates
 function main.f_animPosDraw(a, x, y, f, instant)
-	animSetPos(a, x, y)
+	if x ~= nil then animSetPos(a, x, y) end
 	if f ~= nil then animSetFacing(a, f) end
 	animDraw(a)
 	if instant then
@@ -746,6 +734,11 @@ function main.f_animFromTable(t, sff, x, y, scaleX, scaleY, facing, infFrame, de
 	return data, length
 end
 
+--print array
+function main.f_arrayPrint(t)
+	print('{' .. table.concat(t, ',') .. '}')
+end
+
 --copy table content into new table
 function main.f_tableCopy(t)
 	if t == nil then
@@ -794,12 +787,15 @@ function main.f_tableReverse(t)
 	return reversedTable
 end
 
---wrap table
-function main.f_tableWrap(t, l)
-    for i = 1, l do
-        table.insert(t, 1, t[#t])
-        table.remove(t, #t)
-    end
+--rotate table elements
+function main.f_tableRotate(t, num)
+	for i = 1, math.abs(num) do
+		if num < 0 then
+			table.insert(t, 1, table.remove(t))
+		else
+			table.insert(t, table.remove(t, 1))
+		end
+	end
 end
 
 --shift table elements
@@ -818,21 +814,31 @@ function main.f_tableRemove(t, value)
 end
 
 --merge 2 tables into 1 overwriting values
+local function f_printValue(arg)
+	if type(arg) == "table" then
+		return arg[1]
+	end
+	return arg
+end
 function main.f_tableMerge(t1, t2, key)
 	for k, v in pairs(t2) do
 		if type(v) == "table" then
 			if type(t1[k] or false) == "table" then
 				main.f_tableMerge(t1[k] or {}, t2[k] or {}, k)
+			elseif (t1[k] ~= nil and type(t1[k]) ~= type(v)) then
+				--panicError("\n" .. k:gsub('_', '.') .. ": Incorrect data type (" .. type(t1[k]) .. " expected, got " .. type(v) .. "): " .. f_printValue(v))
+				print(k:gsub('_', '.') .. ": Incorrect data type (" .. type(t1[k]) .. " expected, got " .. type(v) .. "): " .. f_printValue(v))
 			else
 				t1[k] = v
 			end
 		elseif type(t1[k] or false) == "table" then
 			t1[k][1] = v
-		elseif t1[k] ~= nil and type(t1[k]) ~= type(v) and not (key or k):match('_font$') then
+		elseif t1[k] ~= nil and type(t1[k]) ~= type(v) and (not (key or k):match('_font$') --[[or (type(k) == "number" and k > 1)]]) then
 			if type(t1[k]) == "string" then
 				t1[k] = tostring(v)
 			else
-				panicError("\nmain.f_tableMerge: " .. (key or k) .. " = " .. v .. " (" .. type(t1[k]) .. " expected, got " .. type(v) .. ")\n")
+				--panicError("\n" .. k:gsub('_', '.') .. ": Incorrect data type (" .. type(t1[k]) .. " expected, got " .. type(v) .. "): " .. f_printValue(v))
+				print(k:gsub('_', '.') .. ": Incorrect data type (" .. type(t1[k]) .. " expected, got " .. type(v) .. "): " .. f_printValue(v))
 			end
 		else
 			t1[k] = v
@@ -860,7 +866,7 @@ function main.f_tableClean(t, t_sort)
 	end
 	--then we add remaining default entries if not existing yet and not disabled (by default or via screenpack)
 	for i = 1, #t do
-		if t_added[t[i].itemname] == nil and t[i].displayname ~= '' then
+		if t_sort[t[i].itemname] ~= nil and t_added[t[i].itemname] == nil and t[i].displayname ~= '' then
 			table.insert(t_clean, t[i])
 		end
 	end
@@ -972,42 +978,49 @@ function main.f_textRender(data, str, counter, x, y, spacingX, spacingY, font_de
 		end
 	else
 		str = str:gsub('\n', '\\n')
-		for _, c in ipairs(main.f_strsplit('\\n', str)) do --split string using "\n" delimiter
+		-- for each new line
+		for _, line in ipairs(main.f_strsplit('\\n', str)) do --split string using "\n" delimiter
 			local text = ''
-			local tmp = ''
+			local word = ''
 			local pxLeft = length
-			local tmp_px = 0
-			local space = (font_def[' '] or fontGetTextWidth(main.font[data.font .. data.height], ' ')) * data.scaleX
-			for i = 1, string.len(c) do
-				local symbol = string.sub(c, i, i)
-				if font_def[symbol] == nil then --store symbol length in global table for faster counting
-					font_def[symbol] = fontGetTextWidth(main.font[data.font .. data.height], symbol)
+			local word_px = 0
+			-- for each character in current line
+			for i = 1, string.len(line) do
+				local symbol = string.sub(line, i, i)
+				-- store symbol length in global table for faster counting
+				if font_def[symbol] == nil then
+					font_def[symbol] = fontGetTextWidth(main.font[data.font .. data.height], symbol, data.bank)
 				end
-				local px = font_def[symbol] * data.scaleX
-				if pxLeft + space - px >= 0 then
-					if symbol:match('%s') then
-						text = text .. tmp .. symbol
-						tmp = ''
-						tmp_px = 0
+				local px = (font_def[symbol] + font_def.Spacing[1]) * data.scaleX
+				-- continue counting if character fits in the line length
+				if pxLeft - px >= 0 or symbol:match('%s') or text == '' then
+					-- word valid for line appending on whitespace character (or if it's first word in line)
+					if symbol:match('%s') or text == '' then
+						text = text .. word .. symbol
+						word = ''
+						word_px = 0
+					-- otherwise add character to the current word
 					else
-						tmp = tmp .. symbol
-						tmp_px = tmp_px + px
+						word = word .. symbol
+						word_px = word_px + px
 					end
 					pxLeft = pxLeft - px
-				else --character in this word is outside the pixel range
+				-- otherwise append current words to table and reset line counting
+				else
 					table.insert(t, text)
 					text = ''
-					tmp = tmp .. symbol
-					tmp_px = tmp_px + px
-					pxLeft = length - tmp_px
-					tmp_px = 0
+					word = word .. symbol
+					word_px = word_px + px
+					pxLeft = length - word_px
+					word_px = 0
 				end
 			end
-			text = text .. tmp
+			-- append remaining text in last line
+			text = text .. word
 			table.insert(t, text)
 		end
 	end
-	--render
+	-- render text
 	local retDone = false
 	local retLength = 0
 	local lengthCnt = 0
@@ -1126,23 +1139,6 @@ function main.f_countSubstring(s1, s2)
     return select(2, s1:gsub(s2, ""))
 end
 
---convert mugen style window coordinate system to the one used in engine
-function main.windowCoords(t, substract)
-	local window = main.f_tableCopy(t)
-	if window[3] < window[1] then
-		t[3] = window[1]
-		t[1] = window[3]
-	end
-	if window[4] < window[2] then
-		t[4] = window[2]
-		t[2] = window[4]
-	end
-	if substract then
-		t[3] = t[3] - t[1]
-		t[4] = t[4] - t[2]
-	end
-end
-
 --update rounds to win variables
 main.roundsNumSingle = {}
 main.roundsNumSimul = {}
@@ -1210,7 +1206,8 @@ function main.f_commandLine()
 	if main.flags['-loadmotif'] == nil then
 		loadLifebar(main.lifebarDef)
 	end
-	local frames = getTimeFramesPerCount()
+	setLifebarElements({guardbar = config.BarGuard, stunbar = config.BarStun, redlifebar = config.BarRedLife})
+	local frames = framespercount()
 	main.f_updateRoundsNum()
 	local t = {}
 	local t_assignedPals = {}
@@ -1242,20 +1239,20 @@ function main.f_commandLine()
 				remapInput(num, tonumber(main.flags['-p' .. num .. '.input']))
 			end
 			table.insert(t, {character = v, player = player, num = num, pal = pal, ai = ai, override = {}})
-			if main.flags['-p' .. num .. '.power'] ~= nil then
-				t[#t].override['power'] = tonumber(main.flags['-p' .. num .. '.power'])
-			end
-			if main.flags['-p' .. num .. '.guardPoints'] ~= nil then
-				t[#t].override['guardPoints'] = tonumber(main.flags['-p' .. num .. '.guardPoints'])
-			end
-			if main.flags['-p' .. num .. '.dizzyPoints'] ~= nil then
-				t[#t].override['dizzyPoints'] = tonumber(main.flags['-p' .. num .. '.dizzyPoints'])
-			end
 			if main.flags['-p' .. num .. '.life'] ~= nil then
 				t[#t].override['life'] = tonumber(main.flags['-p' .. num .. '.life'])
 			end
 			if main.flags['-p' .. num .. '.lifeMax'] ~= nil then
 				t[#t].override['lifeMax'] = tonumber(main.flags['-p' .. num .. '.lifeMax'])
+			end
+			if main.flags['-p' .. num .. '.power'] ~= nil then
+				t[#t].override['power'] = tonumber(main.flags['-p' .. num .. '.power'])
+			end
+			if main.flags['-p' .. num .. '.dizzyPoints'] ~= nil then
+				t[#t].override['dizzyPoints'] = tonumber(main.flags['-p' .. num .. '.dizzyPoints'])
+			end
+			if main.flags['-p' .. num .. '.guardPoints'] ~= nil then
+				t[#t].override['guardPoints'] = tonumber(main.flags['-p' .. num .. '.guardPoints'])
 			end
 			if main.flags['-p' .. num .. '.lifeRatio'] ~= nil then
 				t[#t].override['lifeRatio'] = tonumber(main.flags['-p' .. num .. '.lifeRatio'])
@@ -1301,22 +1298,22 @@ function main.f_commandLine()
 	frames = frames * math.max(t_framesMul[1], t_framesMul[2])
 	setTimeFramesPerCount(frames)
 	setRoundTime(math.max(-1, roundTime * frames))
-	setGuardBar(config.BarGuard)
-	setStunBar(config.BarStun)
-	setRedLifeBar(config.BarRedLife)
 	local stage = config.StartStage
 	if main.flags['-s'] ~= nil then
-		if main.f_fileExists(main.flags['-s']) then
-			stage = main.flags['-s']
-		elseif main.f_fileExists('stages/' .. main.flags['-s'] .. '.def') then
-			stage = 'stages/' .. main.flags['-s'] .. '.def'
+		for _, v in ipairs({main.flags['-s'], 'stages/' .. main.flags['-s'], 'stages/' .. main.flags['-s'] .. '.def'}) do
+			if main.f_fileExists(v) then
+				stage = v
+				break
+			end
 		end
 	end
 	if main.t_stageDef[stage:lower()] == nil then
-		addStage(stage)
+		if addStage(stage) == 0 then
+			panicError("\nUnable to add stage: " .. stage .. "\n")
+		end
 		main.t_stageDef[stage:lower()] = #main.f_tableExists(main.t_selStages) + 1
 	end
-	selectStart()
+	clearSelected()
 	setMatchNo(1)
 	selectStage(main.t_stageDef[stage:lower()])
 	setTeamMode(1, t_teamMode[1], t_numChars[1])
@@ -1341,8 +1338,11 @@ function main.f_commandLine()
 		if v.ai == 0 and t_teamMode[v.player] == 3 then
 			remapInput(v.num, v.player)
 		end
-		overrideCharData(v.num, v.override)
+		overrideCharData(v.player, math.ceil(v.num / 2), v.override)
 		if start ~= nil then
+			if start.p[v.player].t_selected == nil then
+				start.p[v.player].t_selected = {}
+			end
 			table.insert(start.p[v.player].t_selected, {
 				ref = main.t_charDef[v.character:lower()],
 				pal = v.pal,
@@ -1375,7 +1375,7 @@ main.txt_loading:draw()
 refresh()
 loadLifebar(main.lifebarDef)
 main.f_loadingRefresh(main.txt_loading)
-main.timeFramesPerCount = getTimeFramesPerCount()
+main.timeFramesPerCount = framespercount()
 main.f_updateRoundsNum()
 
 --generate preload list
@@ -1383,40 +1383,40 @@ local t_preloadAnim = {}
 local t_preloadSpr = {}
 local t_preload = {
 	--select_info
-	{typ = 'canim', arg = {motif.select_info.portrait_anim, nil}},
+	{typ = 'canim', arg = {motif.select_info.portrait_anim}},
 	{typ = 'cspr', arg = motif.select_info.portrait_spr},
-	{typ = 'canim', arg = {motif.select_info.p1_face_anim, nil}},
+	{typ = 'canim', arg = {motif.select_info.p1_face_anim}},
 	{typ = 'cspr', arg = motif.select_info.p1_face_spr},
-	{typ = 'canim', arg = {motif.select_info.p2_face_anim, nil}},
+	{typ = 'canim', arg = {motif.select_info.p2_face_anim}},
 	{typ = 'cspr', arg = motif.select_info.p2_face_spr},
-	{typ = 'canim', arg = {motif.select_info.p1_face_done_anim, nil}},
+	{typ = 'canim', arg = {motif.select_info.p1_face_done_anim}},
 	{typ = 'cspr', arg = motif.select_info.p1_face_done_spr},
-	{typ = 'canim', arg = {motif.select_info.p2_face_done_anim, nil}},
+	{typ = 'canim', arg = {motif.select_info.p2_face_done_anim}},
 	{typ = 'cspr', arg = motif.select_info.p2_face_done_spr},
 	--vs_screen
-	{typ = 'canim', arg = {motif.vs_screen.p1_anim, nil}},
+	{typ = 'canim', arg = {motif.vs_screen.p1_anim}},
 	{typ = 'cspr', arg = motif.vs_screen.p1_spr},
-	{typ = 'canim', arg = {motif.vs_screen.p2_anim, nil}},
+	{typ = 'canim', arg = {motif.vs_screen.p2_anim}},
 	{typ = 'cspr', arg = motif.vs_screen.p2_spr},
+	{typ = 'canim', arg = {motif.vs_screen.p1_done_anim}},
+	{typ = 'cspr', arg = motif.vs_screen.p1_done_spr},
+	{typ = 'canim', arg = {motif.vs_screen.p2_done_anim}},
+	{typ = 'cspr', arg = motif.vs_screen.p2_done_spr},
 	--victory_screen
-	{typ = 'canim', arg = {motif.victory_screen.p1_anim, nil}},
+	{typ = 'canim', arg = {motif.victory_screen.p1_anim}},
 	{typ = 'cspr', arg = motif.victory_screen.p1_spr},
-	{typ = 'canim', arg = {motif.victory_screen.p2_anim, nil}},
+	{typ = 'canim', arg = {motif.victory_screen.p2_anim}},
 	{typ = 'cspr', arg = motif.victory_screen.p2_spr},
-	{typ = 'canim', arg = {motif.victory_screen.p1_face_done_anim, nil}},
-	{typ = 'cspr', arg = motif.victory_screen.p1_face_done_spr},
-	{typ = 'canim', arg = {motif.victory_screen.p2_face_done_anim, nil}},
-	{typ = 'cspr', arg = motif.victory_screen.p2_face_done_spr},
 	--hiscore_info
-	{typ = 'canim', arg = {motif.hiscore_info.face_anim, nil}},
-	{typ = 'cspr', arg = motif.hiscore_info.face_spr},
+	{typ = 'canim', arg = {motif.hiscore_info.item_face_anim}},
+	{typ = 'cspr', arg = motif.hiscore_info.item_face_spr},
 }
 for i = 1, 2 do
 	for _, v in ipairs({{sec = 'select_info', sn = '_face'}, {sec = 'vs_screen', sn = ''}, {sec = 'victory_screen', sn = ''}}) do
 		for j = 1, motif[v.sec]['p' .. i .. v.sn .. '_num'] do
-			table.insert(t_preload, {typ = 'canim', arg = {motif[v.sec]['p' .. i .. '_member' .. j .. v.sn .. '_anim'], nil}})
+			table.insert(t_preload, {typ = 'canim', arg = {motif[v.sec]['p' .. i .. '_member' .. j .. v.sn .. '_anim']}})
 			table.insert(t_preload, {typ = 'cspr', arg = motif[v.sec]['p' .. i .. '_member' .. j .. v.sn .. '_spr']})
-			table.insert(t_preload, {typ = 'canim', arg = {motif[v.sec]['p' .. i .. '_member' .. j .. v.sn .. '_done_anim'], nil}})
+			table.insert(t_preload, {typ = 'canim', arg = {motif[v.sec]['p' .. i .. '_member' .. j .. v.sn .. '_done_anim']}})
 			table.insert(t_preload, {typ = 'cspr', arg = motif[v.sec]['p' .. i .. '_member' .. j .. v.sn .. '_done_spr']})
 		end
 	end
@@ -1436,7 +1436,7 @@ end
 for _, v in pairs(t_preloadSpr) do
 	preloadList('cspr', v[1], v[2])
 end
-if motif.select_info.stage_portrait_spr[1] ~= -1 then
+if #motif.select_info.stage_portrait_spr > 0 and motif.select_info.stage_portrait_spr[1] ~= -1 then
 	preloadList('sspr', motif.select_info.stage_portrait_spr[1], motif.select_info.stage_portrait_spr[2])
 end
 if motif.select_info.stage_portrait_anim ~= -1 then
@@ -1458,7 +1458,7 @@ function main.f_warning(t, background, info, title, txt, overlay)
 	esc(false)
 	while true do
 		main.f_cmdInput()
-		if esc() or main.f_input(main.t_players, {'m'}) then
+		if esc() or main.f_input(main.t_players, {'pal', 's'}) then
 			sndPlay(motif.files.snd_data, cancel_snd[1], cancel_snd[2])
 			return false
 		elseif getKey() ~= '' then
@@ -1632,6 +1632,10 @@ function main.f_addChar(line, playable, loading, slot)
 	for i, c in ipairs(main.f_strsplit(',', line)) do --split using "," delimiter
 		c = c:match('^%s*(.-)%s*$')
 		if i == 1 then
+			if c == '' then
+				playable = false
+				break
+			end
 			c = c:gsub('\\', '/')
 			c = tostring(c)
 			--nClock = os.clock()
@@ -1656,7 +1660,7 @@ function main.f_addChar(line, playable, loading, slot)
 			if playable then
 				for _, v in ipairs({'intro', 'ending', 'arcadepath', 'ratiopath'}) do
 					if main.t_selChars[row][v] ~= '' then
-						main.t_selChars[row][v] = main.f_filePath(main.t_selChars[row][v], main.t_selChars[row].dir, 'data/')
+						main.t_selChars[row][v] = searchFile(main.t_selChars[row][v], {main.t_selChars[row].dir, '', motif.fileDir, 'data/'})
 					end
 				end
 				main.t_selChars[row].order = 1
@@ -1749,7 +1753,9 @@ function main.f_addStage(file, hidden)
 	if file:match('/$') then
 		return
 	end
-	addStage(file)
+	if addStage(file) == 0 then
+		return
+	end
 	local stageNo = #main.t_selStages + 1
 	local t_info = getStageInfo(stageNo)
 	table.insert(main.t_selStages, {
@@ -1768,16 +1774,16 @@ function main.f_addStage(file, hidden)
 	--music
 	for k, v in pairs(t_info.stagebgm) do
 		if k:match('^bgmusic') or k:match('^bgmvolume') or k:match('^bgmloop') then
-			local tmp1, tmp2, tmp3 = k:match('^([^%.]+)(%.?)([A-Za-z]*)$')
-			if t_info.stagebgm['bgmusic' .. tmp2 .. tmp3] ~= nil and t_info.stagebgm['bgmusic' .. tmp2 .. tmp3] ~= '' then
-				if main.t_selStages[stageNo]['music' .. tmp3] == nil then
-					main.t_selStages[stageNo]['music' .. tmp3] = {}
-					table.insert(main.t_selStages[stageNo]['music' .. tmp3], {bgmusic = '', bgmvolume = 100, bgmloopstart = 0, bgmloopend = 0})
+			local prefix, dot, suffix = k:match('^([^%.]+)(%.?)([A-Za-z]*)$')
+			if t_info.stagebgm['bgmusic' .. dot .. suffix] ~= nil and t_info.stagebgm['bgmusic' .. dot .. suffix] ~= '' then
+				if main.t_selStages[stageNo]['music' .. suffix] == nil then
+					main.t_selStages[stageNo]['music' .. suffix] = {}
+					table.insert(main.t_selStages[stageNo]['music' .. suffix], {bgmusic = '', bgmvolume = 100, bgmloopstart = 0, bgmloopend = 0})
 				end
 				if k:match('^bgmusic') then
-					main.t_selStages[stageNo]['music' .. tmp3][1][tmp1] = tostring(v)
+					main.t_selStages[stageNo]['music' .. suffix][1][prefix] = searchFile(tostring(v), {file, "", "data/", "sound/"})
 				elseif tonumber(v) then
-					main.t_selStages[stageNo]['music' .. tmp3][1][tmp1] = tonumber(v)
+					main.t_selStages[stageNo]['music' .. suffix][1][prefix] = tonumber(v)
 				end
 			end
 		elseif v ~= '' then
@@ -1787,7 +1793,7 @@ function main.f_addStage(file, hidden)
 	main.t_stageDef[file:lower()] = stageNo
 	--anim data
 	for _, v in pairs({{motif.select_info.stage_portrait_anim, -1}, motif.select_info.stage_portrait_spr}) do
-		if v[1] ~= -1 then
+		if #v > 0 and v[1] ~= -1 then
 			main.t_selStages[stageNo].anim_data = animGetPreloadedData('stage', stageNo, v[1], v[2])
 			if main.t_selStages[stageNo].anim_data ~= nil then
 				animSetScale(
@@ -1864,6 +1870,8 @@ for line in content:gmatch('[^\r\n]+') do
 	elseif lineCase:match('^%s*%[%s*storymode%s*%]') then
 		row = 0
 		section = 4
+	elseif lineCase:match('^%s*%[%w+%]$') then 
+		section = -1
 	elseif section == 1 then --[Characters]
 		if lineCase:match(',%s*exclude%s*=%s*1') then --character should be added after all slots are filled
 			table.insert(t_addExluded, line)
@@ -1889,6 +1897,9 @@ for line in content:gmatch('[^\r\n]+') do
 			c = c:gsub('^%s*(.-)%s*$', '%1')
 			if i == 1 then
 				row = main.f_addStage(c, hidden)
+				if row == nil then
+					break
+				end
 				table.insert(main.t_includeStage[1], row)
 				table.insert(main.t_includeStage[2], row)
 			elseif c:match('^music[alv]?[li]?[tfc]?[et]?o?r?y?%s*=') then --music / musicalt / musiclife / musicvictory
@@ -1918,6 +1929,7 @@ for line in content:gmatch('[^\r\n]+') do
 						panicError("\nUnrecognized stage parameter: " .. param)
 					end
 					main.t_selStages[row][param] = tonumber(value)
+					--order (more than 1 order param can be set at the same time)
 					if param:match('order') then
 						if main.t_orderStages[main.t_selStages[row].order] == nil then
 							main.t_orderStages[main.t_selStages[row].order] = {}
@@ -1926,6 +1938,15 @@ for line in content:gmatch('[^\r\n]+') do
 					end
 				end
 			end
+			--default order
+			if main.t_selStages[row].order == nil then
+				main.t_selStages[row].order = 1
+				if main.t_orderStages[main.t_selStages[row].order] == nil then
+					main.t_orderStages[main.t_selStages[row].order] = {}
+				end
+				table.insert(main.t_orderStages[main.t_selStages[row].order], row)
+			end
+			--unlock param
 			if unlock ~= '' then
 				--main.t_selStages[row].unlock = unlock
 				main.t_unlockLua.stages[row] = unlock
@@ -1989,9 +2010,9 @@ for i = 1, #t_addExluded do
 	main.f_addChar(t_addExluded[i], true, true)
 end
 
---add Training by stupa if not included in select.def
-if main.t_charDef[config.TrainingChar:lower()] == nil then
-	main.f_addChar(config.TrainingChar .. ', exclude = 1', false, true)
+--add Training char if defined and not included in select.def
+if config.TrainingChar ~= '' and main.t_charDef[config.TrainingChar:lower()] == nil then
+	main.f_addChar(config.TrainingChar .. ', order = 0, ordersurvival = 0, exclude = 1', false, true)
 end
 
 --add remaining character parameters
@@ -2024,6 +2045,14 @@ for i = 1, #main.t_selChars do
 	end
 end
 
+--add default starting stage if no stages have been added via select.def
+if #main.t_includeStage[1] == 0 or #main.t_includeStage[2] == 0 then
+	local row = main.f_addStage(config.StartStage)
+	table.insert(main.t_includeStage[1], row)
+	table.insert(main.t_includeStage[2], row)
+end
+
+--update selectableStages table
 function main.f_updateSelectableStages()
 	main.t_selectableStages = {}
 	for _, v in ipairs(main.t_includeStage[2]) do
@@ -2056,48 +2085,6 @@ if main.t_selOptions.bossrushmaxmatches == nil or #main.t_selOptions.bossrushmax
 	main.t_selOptions.bossrushmaxmatches = main.f_tableArray(size, 0)
 	for k, v in pairs(main.t_bossChars) do
 		main.t_selOptions.bossrushmaxmatches[k] = #v
-	end
-end
-
---print warning if training character is missing
-if main.t_charDef[config.TrainingChar:lower()] == nil then
-	main.f_warning(main.f_extractText(motif.warning_info.text_training_text), motif.titlebgdef)
-	os.exit()
-end
-
---print warning if no characters can be randomly chosen
-if #main.t_randomChars == 0 then
-	main.f_warning(main.f_extractText(motif.warning_info.text_chars_text), motif.titlebgdef)
-	os.exit()
-end
-
---print warning if no stages have been added
-if #main.t_includeStage[1] == 0 or #main.t_includeStage[2] == 0 then
-	main.f_warning(main.f_extractText(motif.warning_info.text_stages_text), motif.titlebgdef)
-	os.exit()
-end
-
---print warning if at least 1 match is not possible with the current maxmatches settings
-for k, v in pairs(main.t_selOptions) do
-	local mode = k:match('^(.+)maxmatches$')
-	if mode ~= nil then
-		local orderOK = false
-		for i, num in ipairs(main.t_selOptions[k]) do
-			if mode == 'bossrush' then
-				orderOK = true
-				break
-			elseif mode == 'survival' and (num > 0 or num == -1) and main.t_orderSurvival[i] ~= nil and #main.t_orderSurvival[i] > 0 then
-				orderOK = true
-				break
-			elseif num > 0 and main.t_orderChars[i] ~= nil and #main.t_orderChars[i] > 0 then
-				orderOK = true
-				break
-			end
-		end
-		if not orderOK then
-			main.f_warning(main.f_extractText(motif.warning_info.text_order_text, mode .. '.maxmatches'), motif.titlebgdef)
-			os.exit()
-		end
 	end
 end
 
@@ -2183,21 +2170,30 @@ function main.f_default()
 	if motif.attract_mode.enabled == 0 and start.challenger == 0 then
 		main.credits = -1 --amount of credits from the start (-1 = disabled)
 	end
+	main.dropDefeated = false --if defeated members should be removed from team
 	main.elimination = false --if single lose should stop further lua execution
 	main.exitSelect = false --if "clearing" the mode (matchno == -1) should go back to main menu
 	main.forceChar = {nil, nil} --predefined P1/P2 characters
+	main.forceRosterSize = false --if roster size should be enforced even if there are not enough characters to fill it (not used but may be useful for external modules)
 	main.hiscoreScreen = false --if hiscore screen should be shown
 	main.lifebar = { --which lifebar elements should be rendered
+		active = true,
 		bars = true,
-		lifebar = true,
 		match = false,
 		mode = true,
-		p1ai = false,
+		p1aiLevel = false,
 		p1score = false,
-		p2ai = false,
+		p1winCount = false,
+		p2aiLevel = false,
 		p2score = false,
+		p2winCount = false,
 		timer = false,
+		guardbar = config.BarGuard,
+		stunbar = config.BarStun,
+		redlifebar = config.BarRedLife,
+		hidebars = motif.dialogue_info.enabled == 1,
 	}
+	main.lifePersistence = false --if life should be maintained after match
 	main.luaPath = 'external/script/default.lua' --path to script executed by start.f_selectMode()
 	main.makeRoster = false --if default roster for each match should be generated before first match
 	main.matchWins = { --amount of rounds to win for each team side and team mode
@@ -2209,13 +2205,17 @@ function main.f_default()
 	main.numSimul = {config.NumSimul[1], config.NumSimul[2]} --min/max number of simul characters
 	main.numTag = {config.NumTag[1], config.NumTag[2]} --min/max number of tag characters
 	main.numTurns = {config.NumTurns[1], config.NumTurns[2]} --min/max number of turn characters
+	main.orderSelect = {false, false} --if versus screen order selection should be active
 	main.quickContinue = false --if by default continuing should skip player selection
-	main.rankDisplay = true --if rank data should be displayed at the end of match
+	main.rankDisplay = false --if rank data should be displayed at the end of match
+	main.rankingCondition = false --if winning (clearing) whole mode is needed for rankings to be saved
 	main.resetScore = false --if loosing should set score for the next match to lose count
 	main.resultsTable = nil --which motif section should be used for result screen rendering
+	main.rotationChars = false --flags modes where config.AISurvivalColor should be used instead of config.AIRandomColor
 	main.roundTime = config.RoundTime --sets round time
 	main.selectMenu = {true, false} --which team side should be allowed to select players
 	main.stageMenu = false --if manual stage selection is allowed
+	main.stageOrder = false --if select.def stage order param should be used
 	main.storyboard = {intro = false, ending = false, credits = false, gameover = false} --which storyboards should be active
 	main.teamMenu = {
 		{ratio = false, simul = false, single = false, tag = false, turns = false}, --which team modes should be selectable by P1 side
@@ -2232,18 +2232,20 @@ function main.f_default()
 	setConsecutiveWins(2, 0)
 	setContinue(false)
 	setGameMode('')
-	setGuardBar(config.BarGuard)
 	setHomeTeam(2) --http://mugenguild.com/forum/topics/ishometeam-triggers-169132.0.html
 	setLifebarElements(main.lifebar)
-	setRedLifeBar(config.BarRedLife)
 	setRoundTime(math.max(-1, main.roundTime * main.timeFramesPerCount))
-	setStunBar(config.BarStun)
 	setTimeFramesPerCount(main.timeFramesPerCount)
+	setWinCount(1, 0)
+	setWinCount(2, 0)
 	main.txt_mainSelect:update({text = ''})
 	main.f_cmdBufReset()
 	demoFrameCounter = 0
 end
 
+-- main.t_itemname is a table storing functions with general game mode
+-- configuration (usually ending with start.f_selectMode function call). It can
+-- be appended via external module, without conflicting with default scripts.
 main.t_itemname = {
 	--ARCADE / TEAM ARCADE
 	['arcade'] = function(t, item)
@@ -2260,11 +2262,15 @@ main.t_itemname = {
 		main.continueScreen = true
 		main.exitSelect = true
 		main.hiscoreScreen = true
-		main.lifebar.p1score = true
-		main.lifebar.p2ai = true
+		--main.lifebar.p1score = true
+		--main.lifebar.p2aiLevel = true
 		main.makeRoster = true
+		main.orderSelect[1] = true
+		main.orderSelect[2] = true
+		main.rankDisplay = true
 		main.resetScore = true
 		main.resultsTable = motif.win_screen
+		main.stageOrder = true
 		main.storyboard.credits = true
 		main.storyboard.ending = true
 		main.storyboard.gameover = true
@@ -2326,9 +2332,13 @@ main.t_itemname = {
 		main.elimination = true
 		main.exitSelect = true
 		main.hiscoreScreen = true
-		main.lifebar.p1score = true
-		main.lifebar.p2ai = true
+		--main.lifebar.p1score = true
+		--main.lifebar.p2aiLevel = true
 		main.makeRoster = true
+		main.orderSelect[1] = true
+		main.orderSelect[2] = true
+		main.rankDisplay = true
+		main.rankingCondition = true
 		main.resultsTable = motif.boss_rush_results_screen
 		main.storyboard.credits = true
 		main.storyboard.gameover = true
@@ -2355,8 +2365,9 @@ main.t_itemname = {
 	['freebattle'] = function()
 		main.f_playerInput(main.playerInput, 1)
 		main.t_pIn[2] = 1
-		main.lifebar.p1score = true
-		main.lifebar.p2ai = true
+		--main.lifebar.p1score = true
+		--main.lifebar.p2aiLevel = true
+		main.rankDisplay = true
 		main.selectMenu[2] = true
 		main.stageMenu = true
 		main.teamMenu[1].ratio = true
@@ -2400,7 +2411,7 @@ main.t_itemname = {
 				sndPlay(motif.files.snd_data, motif[main.group].cursor_done_snd[1], motif[main.group].cursor_done_snd[2])
 				config.IP[name] = address
 				table.insert(t, #t, {data = text:create({}), itemname = 'ip_' .. name, displayname = name})
-				main.f_fileWrite(main.flags['-config'], json.encode(config, {indent = true}))
+				main.f_fileWrite(main.flags['-config'], json.encode(config, {indent = 2}))
 			else
 				sndPlay(motif.files.snd_data, motif[main.group].cancel_snd[1], motif[main.group].cancel_snd[2])
 			end
@@ -2420,8 +2431,9 @@ main.t_itemname = {
 		main.coop = true
 		main.elimination = true
 		main.exitSelect = true
-		main.lifebar.match = true
-		main.lifebar.p2ai = true
+		--main.lifebar.match = true
+		--main.lifebar.p2aiLevel = true
+		main.lifePersistence = true
 		main.makeRoster = true
 		main.matchWins.draw = {0, 0}
 		main.matchWins.simul = {1, 1}
@@ -2429,7 +2441,9 @@ main.t_itemname = {
 		main.matchWins.tag = {1, 1}
 		main.numSimul = {2, 2}
 		main.numTag = {2, 2}
+		main.rankDisplay = true
 		main.resultsTable = motif.survival_results_screen
+		main.stageMenu = true
 		main.storyboard.credits = true
 		main.storyboard.gameover = true
 		main.teamMenu[1].simul = true
@@ -2439,7 +2453,6 @@ main.t_itemname = {
 		main.teamMenu[2].single = true
 		main.teamMenu[2].tag = true
 		main.teamMenu[2].turns = true
-		main.versusScreen = true
 		main.txt_mainSelect:update({text = motif.select_info.title_netplaysurvivalcoop_text})
 		setGameMode('netplaysurvivalcoop')
 		return start.f_selectMode
@@ -2457,13 +2470,15 @@ main.t_itemname = {
 		main.continueScreen = true
 		main.coop = true
 		main.exitSelect = true
-		main.lifebar.p1score = true
-		main.lifebar.p2ai = true
+		--main.lifebar.p1score = true
+		--main.lifebar.p2aiLevel = true
 		main.makeRoster = true
 		main.numSimul = {2, 2}
 		main.numTag = {2, 2}
+		main.rankDisplay = true
 		main.resetScore = true
 		main.resultsTable = motif.win_screen
+		main.stageOrder = true
 		main.storyboard.credits = true
 		main.storyboard.ending = true
 		main.storyboard.gameover = true
@@ -2486,8 +2501,11 @@ main.t_itemname = {
 	['netplayversus'] = function()
 		setHomeTeam(1)
 		main.cpuSide[2] = false
-		main.lifebar.p1score = true
-		main.lifebar.p2score = true
+		--main.lifebar.p1winCount = true
+		--main.lifebar.p2winCount = true
+		main.orderSelect[1] = true
+		main.orderSelect[2] = true
+		main.rankDisplay = true
 		main.selectMenu[2] = true
 		main.stageMenu = true
 		main.teamMenu[1].ratio = true
@@ -2519,31 +2537,9 @@ main.t_itemname = {
 	['replay'] = function()
 		return main.f_replay
 	end,
-	--SCORE CHALLENGE
-	['scorechallenge'] = function()
-		main.f_playerInput(main.playerInput, 1)
-		main.t_pIn[2] = 1
-		main.hiscoreScreen = true
-		main.lifebar.p1score = true
-		main.lifebar.p2ai = true
-		main.matchWins.draw = {0, 0}
-		main.matchWins.simul = {1, 1}
-		main.matchWins.single = {1, 1}
-		main.matchWins.tag = {1, 1}
-		main.resultsTable = motif.score_challenge_results_screen
-		main.selectMenu[2] = true
-		main.stageMenu = true
-		main.teamMenu[1].single = true
-		main.teamMenu[2].single = true
-		main.versusScreen = true
-		main.txt_mainSelect:update({text = motif.select_info.title_scorechallenge_text})
-		setGameMode('scorechallenge')
-		return start.f_selectMode
-	end,
 	--SERVER CONNECT
 	['serverconnect'] = function(t, item)
 		if main.f_connect(config.IP[t[item].displayname], main.f_extractText(motif.title_info.connecting_join_text, t[item].displayname, config.IP[t[item].displayname])) then
-			start.f_hardReset()
 			synchronize()
 			math.randomseed(sszRandom())
 			main.f_cmdBufReset()
@@ -2557,7 +2553,6 @@ main.t_itemname = {
 	--SERVER HOST
 	['serverhost'] = function(t, item)
 		if main.f_connect("", main.f_extractText(motif.title_info.connecting_host_text, getListenPort())) then
-			start.f_hardReset()
 			synchronize()
 			math.randomseed(sszRandom())
 			main.f_cmdBufReset()
@@ -2571,6 +2566,7 @@ main.t_itemname = {
 	--STORY MODE ARC
 	['storyarc'] = function(t, item)
 		main.f_playerInput(main.playerInput, 1)
+		main.continueScreen = true
 		main.selectMenu[1] = false
 		for _, v in ipairs(main.t_selStoryMode) do
 			if v.name == t[item].itemname then
@@ -2591,17 +2587,24 @@ main.t_itemname = {
 		main.charparam.single = true
 		main.charparam.stage = true
 		main.charparam.time = true
+		main.dropDefeated = true
 		main.elimination = true
 		main.exitSelect = true
 		main.hiscoreScreen = true
-		main.lifebar.match = true
-		main.lifebar.p2ai = true
+		--main.lifebar.match = true
+		--main.lifebar.p2aiLevel = true
+		main.lifePersistence = true
 		main.makeRoster = true
 		main.matchWins.draw = {0, 0}
 		main.matchWins.simul = {1, 1}
 		main.matchWins.single = {1, 1}
 		main.matchWins.tag = {1, 1}
+		main.orderSelect[1] = true
+		main.orderSelect[2] = true
+		main.rankDisplay = true
 		main.resultsTable = motif.survival_results_screen
+		main.rotationChars = true
+		main.stageMenu = true
 		main.storyboard.credits = true
 		main.storyboard.gameover = true
 		main.teamMenu[1].ratio = true
@@ -2614,7 +2617,6 @@ main.t_itemname = {
 		main.teamMenu[2].single = true
 		main.teamMenu[2].tag = true
 		main.teamMenu[2].turns = true
-		main.versusScreen = true
 		main.txt_mainSelect:update({text = motif.select_info.title_survival_text})
 		setGameMode('survival')
 		return start.f_selectMode
@@ -2631,8 +2633,9 @@ main.t_itemname = {
 		main.elimination = true
 		main.exitSelect = true
 		main.hiscoreScreen = true
-		main.lifebar.match = true
-		main.lifebar.p2ai = true
+		--main.lifebar.match = true
+		--main.lifebar.p2aiLevel = true
+		main.lifePersistence = true
 		main.makeRoster = true
 		main.matchWins.draw = {0, 0}
 		main.matchWins.simul = {1, 1}
@@ -2640,7 +2643,10 @@ main.t_itemname = {
 		main.matchWins.tag = {1, 1}
 		main.numSimul = {2, math.min(4, config.Players)}
 		main.numTag = {2, math.min(4, config.Players)}
+		main.rankDisplay = true
 		main.resultsTable = motif.survival_results_screen
+		main.rotationChars = true
+		main.stageMenu = true
 		main.storyboard.credits = true
 		main.storyboard.gameover = true
 		main.teamMenu[1].simul = true
@@ -2650,7 +2656,6 @@ main.t_itemname = {
 		main.teamMenu[2].single = true
 		main.teamMenu[2].tag = true
 		main.teamMenu[2].turns = true
-		main.versusScreen = true
 		main.txt_mainSelect:update({text = motif.select_info.title_survivalcoop_text})
 		setGameMode('survivalcoop')
 		return start.f_selectMode
@@ -2669,13 +2674,15 @@ main.t_itemname = {
 		main.coop = true
 		main.exitSelect = true
 		main.hiscoreScreen = true
-		main.lifebar.p1score = true
-		main.lifebar.p2ai = true
+		--main.lifebar.p1score = true
+		--main.lifebar.p2aiLevel = true
 		main.makeRoster = true
 		main.numSimul = {2, math.min(4, config.Players)}
 		main.numTag = {2, math.min(4, config.Players)}
+		main.rankDisplay = true
 		main.resetScore = true
 		main.resultsTable = motif.win_screen
+		main.stageOrder = true
 		main.storyboard.credits = true
 		main.storyboard.ending = true
 		main.storyboard.gameover = true
@@ -2708,15 +2715,19 @@ main.t_itemname = {
 		main.continueScreen = true
 		main.exitSelect = true
 		main.hiscoreScreen = true
-		main.lifebar.p2ai = true
-		main.lifebar.timer = true
+		--main.lifebar.p2aiLevel = true
+		--main.lifebar.timer = true
 		main.makeRoster = true
 		main.quickContinue = true
+		main.orderSelect[1] = true
+		main.orderSelect[2] = true
+		main.rankDisplay = true
 		main.resetScore = true
 		main.resultsTable = motif.time_attack_results_screen
 		if main.roundTime == -1 then
 			main.roundTime = 99
 		end
+		main.stageOrder = true
 		main.storyboard.credits = true
 		main.storyboard.gameover = true
 		main.teamMenu[1].ratio = true
@@ -2735,39 +2746,16 @@ main.t_itemname = {
 		setGameMode('timeattack')
 		return start.f_selectMode
 	end,
-	--TIME CHALLENGE
-	['timechallenge'] = function()
-		main.f_playerInput(main.playerInput, 1)
-		main.t_pIn[2] = 1
-		main.hiscoreScreen = true
-		main.lifebar.p2ai = true
-		main.lifebar.timer = true
-		main.matchWins.draw = {0, 0}
-		main.matchWins.simul = {1, 1}
-		main.matchWins.single = {1, 1}
-		main.matchWins.tag = {1, 1}
-		main.resultsTable = motif.time_challenge_results_screen
-		if main.roundTime == -1 then
-			main.roundTime = 99
-		end
-		main.selectMenu[2] = true
-		main.stageMenu = true
-		main.teamMenu[1].single = true
-		main.teamMenu[2].single = true
-		main.versusScreen = true
-		main.txt_mainSelect:update({text = motif.select_info.title_timechallenge_text})
-		setGameMode('timechallenge')
-		return start.f_selectMode
-	end,
-	--TOURNAMENT
-	['tournament'] = function()
-	end,
 	--TRAINING
 	['training'] = function()
+		setHomeTeam(1)
 		main.f_playerInput(main.playerInput, 1)
-		main.cpuSide[2] = false
-		main.forceChar[2] = {main.t_charDef[config.TrainingChar:lower()]}
-		main.lifebar.p1score = true
+		main.t_pIn[2] = 1
+		if main.t_charDef[config.TrainingChar:lower()] ~= nil then
+			main.forceChar[2] = {main.t_charDef[config.TrainingChar:lower()]}
+		end
+		--main.lifebar.p1score = true
+		--main.lifebar.p2aiLevel = true
 		main.roundTime = -1
 		main.selectMenu[2] = true
 		main.stageMenu = true
@@ -2791,8 +2779,11 @@ main.t_itemname = {
 			main.t_pIn[2] = start.challenger
 		end
 		main.cpuSide[2] = false
-		main.lifebar.p1score = true
-		main.lifebar.p2score = true
+		--main.lifebar.p1winCount = true
+		--main.lifebar.p2winCount = true
+		main.orderSelect[1] = true
+		main.orderSelect[2] = true
+		main.rankDisplay = true
 		main.selectMenu[2] = true
 		main.stageMenu = true
 		if start.challenger == 0 and t[item].itemname == 'versus' then
@@ -2825,10 +2816,11 @@ main.t_itemname = {
 		setHomeTeam(1)
 		main.coop = true
 		main.cpuSide[2] = false
-		main.lifebar.p1score = true
-		main.lifebar.p2score = true
+		--main.lifebar.p1winCount = true
+		--main.lifebar.p2winCount = true
 		main.numSimul = {2, math.min(4, math.max(2, math.ceil(config.Players / 2)))}
 		main.numTag = {2, math.min(4, math.max(2, math.ceil(config.Players / 2)))}
+		main.rankDisplay = true
 		main.selectMenu[2] = true
 		main.stageMenu = true
 		main.teamMenu[1].simul = true
@@ -2841,49 +2833,14 @@ main.t_itemname = {
 		setGameMode('versuscoop')
 		return start.f_selectMode
 	end,
-	--VS 100 KUMITE
-	['vs100kumite'] = function()
-		main.f_playerInput(main.playerInput, 1)
-		main.t_pIn[2] = 1
-		main.charparam.ai = true
-		main.charparam.music = true
-		main.charparam.single = true
-		main.charparam.stage = true
-		main.charparam.time = true
-		main.exitSelect = true
-		main.hiscoreScreen = true
-		main.lifebar.match = true
-		main.lifebar.p2ai = true
-		main.makeRoster = true
-		main.matchWins.draw = {0, 0}
-		main.matchWins.simul = {1, 1}
-		main.matchWins.single = {1, 1}
-		main.matchWins.tag = {1, 1}
-		main.resultsTable = motif.vs100_kumite_results_screen
-		main.storyboard.credits = true
-		main.storyboard.gameover = true
-		main.teamMenu[1].ratio = true
-		main.teamMenu[1].simul = true
-		main.teamMenu[1].single = true
-		main.teamMenu[1].tag = true
-		main.teamMenu[1].turns = true
-		main.teamMenu[2].ratio = true
-		main.teamMenu[2].simul = true
-		main.teamMenu[2].single = true
-		main.teamMenu[2].tag = true
-		main.teamMenu[2].turns = true
-		main.versusScreen = true
-		main.txt_mainSelect:update({text = motif.select_info.title_vs100kumite_text})
-		setGameMode('vs100kumite')
-		return start.f_selectMode
-	end,
 	--WATCH
 	['watch'] = function()
 		main.f_playerInput(main.playerInput, 1)
 		main.t_pIn[2] = 1
 		main.cpuSide[1] = true
-		main.lifebar.p1ai = true
-		main.lifebar.p2ai = true
+		--main.lifebar.p1aiLevel = true
+		--main.lifebar.p2aiLevel = true
+		main.rankDisplay = true
 		main.selectMenu[2] = true
 		main.stageMenu = true
 		main.teamMenu[1].ratio = true
@@ -2911,7 +2868,7 @@ function main.f_deleteIP(item, t)
 		sndPlay(motif.files.snd_data, motif.title_info.cancel_snd[1], motif.title_info.cancel_snd[2])
 		resetKey()
 		config.IP[t[item].itemname:gsub('^ip_', '')] = nil
-		main.f_fileWrite(main.flags['-config'], json.encode(config, {indent = true}))
+		main.f_fileWrite(main.flags['-config'], json.encode(config, {indent = 2}))
 		for i = 1, #t do
 			if t[i].itemname == t[item].itemname then
 				table.remove(t, i)
@@ -3007,7 +2964,7 @@ function main.f_createMenu(tbl, bool_bgreset, bool_main, bool_f1, bool_del)
 					main.f_demo()
 				end
 				local item_sav = item
-				cursorPosY, moveTxt, item = main.f_menuCommonCalc(t, item, cursorPosY, moveTxt, main.group, main.f_extractKeys(motif[main.group].menu_key_previous), main.f_extractKeys(motif[main.group].menu_key_next))
+				cursorPosY, moveTxt, item = main.f_menuCommonCalc(t, item, cursorPosY, moveTxt, main.group, main.f_extractKeys(motif[main.group].menu_previous_key), main.f_extractKeys(motif[main.group].menu_next_key))
 				main.txt_title:update({text = tbl.title})
 				if item_sav ~= item then
 					demoFrameCounter = 0
@@ -3016,6 +2973,19 @@ function main.f_createMenu(tbl, bool_bgreset, bool_main, bool_f1, bool_del)
 				if esc() or main.f_input(main.t_players, {'m'}) then
 					if not bool_main then
 						sndPlay(motif.files.snd_data, motif[main.group].cancel_snd[1], motif[main.group].cancel_snd[2])
+					elseif not esc() and t[item].itemname ~= 'exit' then
+						--menu key moves cursor to exit without exiting the game
+						for i = 1, #t do
+							if t[i].itemname == 'exit' then
+								sndPlay(motif.files.snd_data, motif[main.group].cancel_snd[1], motif[main.group].cancel_snd[2])
+								item = i
+								cursorPosY = math.min(item, motif[main.group].menu_window_visibleitems)
+								if cursorPosY >= motif[main.group].menu_window_visibleitems then
+									moveTxt = (item - motif[main.group].menu_window_visibleitems) * motif[main.group].menu_item_spacing[2]
+								end
+								break
+							end
+						end
 					end
 					if not bool_main or esc() then
 						break
@@ -3045,9 +3015,9 @@ function main.f_createMenu(tbl, bool_bgreset, bool_main, bool_f1, bool_del)
 					resetKey()
 				elseif bool_del and getKey('DELETE') then
 					tbl.items = main.f_deleteIP(item, t)
-				elseif main.f_input(main.t_players, main.f_extractKeys(motif[main.group].menu_key_hiscore)) and main.f_hiscoreDisplay(t[item].itemname) then
+				elseif main.f_input(main.t_players, main.f_extractKeys(motif[main.group].menu_hiscore_key)) and main.f_hiscoreDisplay(t[item].itemname) then
 					demoFrameCounter = 0
-				elseif main.f_input(main.t_players, main.f_extractKeys(motif[main.group].menu_key_accept)) then
+				elseif main.f_input(main.t_players, main.f_extractKeys(motif[main.group].menu_accept_key)) then
 					demoFrameCounter = 0
 					local f = t[item].itemname
 					if f == 'back' then
@@ -3246,7 +3216,6 @@ function main.f_replay()
 		elseif main.f_input(main.t_players, {'pal', 's'}) then
 			sndPlay(motif.files.snd_data, motif[main.group].cursor_done_snd[1], motif[main.group].cursor_done_snd[2])
 			enterReplay(t[item].itemname)
-			start.f_hardReset()
 			synchronize()
 			math.randomseed(sszRandom())
 			main.f_cmdBufReset()
@@ -3325,6 +3294,15 @@ function main.f_unlockChar(num, bool, reset)
 		if main.t_selChars[num].hidden ~= 0 then
 			main.t_selChars[num].hidden_default = main.t_selChars[num].hidden
 			main.t_selChars[num].hidden = 0
+			for k, t in pairs({order = main.t_orderChars, ordersurvival = main.t_orderSurvival}) do
+				if main.t_selChars[num][k] ~= nil and main.t_selChars[num][k] < 0 then
+					main.t_selChars[num][k] = 0 - main.t_selChars[num][k]
+					if t[main.t_selChars[num][k]] == nil then
+						t[main.t_selChars[num][k]] = {}
+					end
+					table.insert(t[main.t_selChars[num][k]], main.t_selChars[num].char_ref)
+				end
+			end
 			start.t_grid[main.t_selChars[num].row][main.t_selChars[num].col].hidden = main.t_selChars[num].hidden
 			if reset then start.f_resetGrid() end
 		end
@@ -3357,13 +3335,10 @@ end
 main.t_hiscoreData = {
 	arcade = {mode = 'arcade', data = 'score', title = motif.select_info.title_arcade_text},
 	bossrush = {mode = 'bossrush', data = 'score', title = motif.select_info.title_bossrush_text},
-	scorechallenge = {mode = 'scorechallenge', data = 'score', title = motif.select_info.title_scorechallenge_text},
 	survival = {mode = 'survival', data = 'win', title = motif.select_info.title_survival_text},
 	survivalcoop = {mode = 'survivalcoop', data = 'win', title = motif.select_info.title_survivalcoop_text},
 	teamcoop = {mode = 'teamcoop', data = 'score', title = motif.select_info.title_teamcoop_text},
 	timeattack = {mode = 'timeattack', data = 'time', title = motif.select_info.title_timeattack_text},
-	timechallenge = {mode = 'timechallenge', data = 'time', title = motif.select_info.title_timechallenge_text},
-	vs100kumite = {mode = 'vs100kumite', data = 'win', title = motif.select_info.title_vs100kumite_text},
 }
 main.t_hiscoreData.teamarcade = main.t_hiscoreData.arcade
 
@@ -3437,19 +3412,8 @@ function main.f_attractStart()
 			txt_attract_insert:draw()
 		end
 		--draw timer
-		if motif.attract_mode.start_timer_enabled == 1 and timerActive then
-			local num = main.f_round((motif.attract_mode.start_timer_count * motif.attract_mode.start_timer_framespercount - timer + motif.attract_mode.start_timer_displaytime) / motif.attract_mode.start_timer_framespercount)
-			if num <= -1 then
-				timerActive = false
-				timer = -1
-				txt_attract_timer:update({text = motif.attract_mode.start_timer_font_text:gsub('%%i', tostring(0))})
-			else
-				timer = timer + 1
-				txt_attract_timer:update({text = motif.attract_mode.start_timer_font_text:gsub('%%i', tostring(math.max(0, num)))})
-			end
-			if timer >= motif.attract_mode.start_timer_displaytime then
-				txt_attract_timer:draw()
-			end
+		if motif.attract_mode.start_timer_count ~= -1 and timerActive then
+			timer, timerActive = main.f_drawTimer(timer, motif.attract_mode, 'start_timer_', txt_attract_timer)
 		end
 		--draw credits text
 		if main.credits ~= -1 then
@@ -3562,6 +3526,9 @@ end
 
 --demo mode
 function main.f_demo()
+	if #main.t_randomChars == 0 then
+		return
+	end
 	if main.fadeActive or motif.demo_mode.enabled == 0 then
 		demoFrameCounter = 0
 		return
@@ -3598,7 +3565,6 @@ function main.f_demoStart()
 	game()
 	setAllowDebugKeys(config.DebugKeys)
 	setAllowDebugMode(config.DebugMode)
-	refresh()
 	if motif.attract_mode.enabled == 0 then
 		if introWaitCycles >= motif.demo_mode.intro_waitcycles then
 			start.hiscoreInit = false
@@ -3729,7 +3695,7 @@ function main.f_menuCommonDraw(t, item, cursorPosY, moveTxt, section, bgdef, tit
 	title:draw()
 	--draw menu items
 	local items_shown = item + motif[section].menu_window_visibleitems - cursorPosY
-	if items_shown > #t or (motif[section].menu_window_visibleitems > 1 and items_shown < #t and (motif[section].menu_window_margins_y[1] ~= 0 or motif[section].menu_window_margins_y[2] ~= 0)) then
+	if items_shown > #t or (motif[section].menu_window_visibleitems > 0 and items_shown < #t and (motif[section].menu_window_margins_y[1] ~= 0 or motif[section].menu_window_margins_y[2] ~= 0)) then
 		items_shown = #t
 	end
 	for i = 1, items_shown do
@@ -3918,6 +3884,24 @@ function main.f_menuCommonDraw(t, item, cursorPosY, moveTxt, section, bgdef, tit
 	end
 end
 
+--common timer draw code
+function main.f_drawTimer(timer, t, prefix, txt)
+	local num = main.f_round((t[prefix .. 'count'] * t[prefix .. 'framespercount'] - timer + t[prefix .. 'displaytime']) / t[prefix .. 'framespercount'])
+	local active = true
+	if num <= -1 then
+		active = false
+		timer = -1
+		txt:update({text = t[prefix .. 'font_text']:gsub('%%i', tostring(0))})
+	else
+		timer = timer + 1
+		txt:update({text = t[prefix .. 'font_text']:gsub('%%i', tostring(math.max(0, num)))})
+	end
+	if timer >= t[prefix .. 'displaytime'] then
+		txt:draw()
+	end
+	return timer, active
+end
+
 --reset background
 function main.f_bgReset(data)
 	main.t_animUpdate = {}
@@ -3945,6 +3929,7 @@ function main.f_fadeReset(fadeType, fadeGroup)
 end
 
 --play music
+main.lastBgm = ''
 function main.f_playBGM(interrupt, bgm, bgmLoop, bgmVolume, bgmLoopstart, bgmLoopend)
 	if main.flags['-nomusic'] ~= nil then
 		return
@@ -3954,8 +3939,9 @@ function main.f_playBGM(interrupt, bgm, bgmLoop, bgmVolume, bgmLoopstart, bgmLoo
 	local bgmVolume = bgmVolume or 100
 	local bgmLoopstart = bgmLoopstart or 0
 	local bgmLoopend = bgmLoopend or 0
-	if interrupt or bgm ~= '' then
+	if interrupt or (bgm ~= '' --[[and bgm ~= main.lastBgm]]) then
 		playBGM(bgm, true, bgmLoop, bgmVolume, bgmLoopstart, bgmLoopend)
+		main.lastBgm = bgm
 	end
 end
 

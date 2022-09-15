@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -155,8 +156,11 @@ func readBackGround(is IniSection, link *backGround,
 			bg.anim.frames = []AnimFrame{*newAnimFrame()}
 			bg.anim.frames[0].Group, bg.anim.frames[0].Number =
 				I32ToI16(g), I32ToI16(n)
+		} else if is["actionno"] != "" {
+			t = 1
 		}
-	} else if t == 1 {
+	}
+	if t == 1 {
 		if is.ReadI32("actionno", &bg.actionno) {
 			if a := at.get(bg.actionno); a != nil {
 				bg.anim = *a
@@ -320,7 +324,7 @@ func (bg *backGround) reset() {
 	bg.bga.sinlooptime = bg.startsinlt
 }
 func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
-	stgscl [2]float32, shakeY float32) {
+	stgscl [2]float32, shakeY float32, isStage bool) {
 	xras := (bg.rasterx[1] - bg.rasterx[0]) / bg.rasterx[0]
 	xbs, dx := bg.xscale[1], MaxF(0, bg.delta[0]*bgscl)
 	sclx := MaxF(0, scl+(1-scl)*(1-dx))
@@ -358,7 +362,9 @@ func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
 	x := bg.start[0] + bg.xofs - (pos[0]/stgscl[0]+bg.camstartx)*bg.delta[0] +
 		bg.bga.offset[0]
 	y := bg.start[1] - (pos[1]/stgscl[1])*bg.delta[1] + bg.bga.offset[1]
-	if !sys.gs.cam.ZoomEnable {
+	// x, y flooring has been commented out since it makes background velocity
+	// movement less smooth, regardless if the stage has zoom or not
+	/*if isStage && !sys.gs.cam.ZoomEnable {
 		if bg.rasterx[1] == bg.rasterx[0] &&
 			bg.bga.sinlooptime[0] <= 0 && bg.bga.sinoffset[0] == 0 {
 			x = float32(math.Floor(float64(x/bgscl))) * bgscl
@@ -366,7 +372,7 @@ func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
 		if bg.bga.sinlooptime[1] <= 0 && bg.bga.sinoffset[1] == 0 {
 			y = float32(math.Floor(float64(y/bgscl))) * bgscl
 		}
-	}
+	}*/
 	ys2 := bg.scaledelta[1] * pos[1] * bg.delta[1] * bgscl
 	ys := ((100-pos[1]*bg.yscaledelta)*bgscl/bg.yscalestart)*bg.scalestart[1] + ys2
 	xs := bg.scaledelta[0] * pos[0] * bg.delta[0] * bgscl
@@ -385,6 +391,9 @@ func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
 		}
 	}
 	startrect0 := (float32(rect[0]) - (pos[0]+bg.camstartx)*bg.windowdelta[0] + (float32(sys.gameWidth)/2/sclx - float32(bg.notmaskwindow)*(float32(sys.gameWidth)/2)*(1/lscl[0]))) * sys.widthScale * wscl[0]
+	if !isStage && wscl[0] == 1 {
+		startrect0 += float32(sys.gameWidth-320) / 2 * sys.widthScale
+	}
 	startrect1 := ((float32(rect[1])-pos[1]*bg.windowdelta[1]+(float32(sys.gameHeight)/scly-240))*wscl[1] - shakeY) * sys.heightScale
 	rect[0] = int32(math.Floor(float64(startrect0)))
 	rect[1] = int32(math.Floor(float64(startrect1)))
@@ -405,8 +414,8 @@ type bgCtrl struct {
 	x, y         float32
 	v            [3]int32
 	positionlink bool
-	//flag         bool
-	idx int
+	idx          int
+	sctrlid      int32
 }
 
 func newBgCtrl() *bgCtrl {
@@ -451,6 +460,7 @@ func (bgc *bgCtrl) read(is IniSection, idx int) {
 	} else if is.ReadF32("value", &bgc.x) {
 		is.readI32ForStage("value", &bgc.v[0], &bgc.v[1], &bgc.v[2])
 	}
+	is.ReadI32("sctrlid", &bgc.sctrlid)
 }
 func (bgc *bgCtrl) xEnable() bool {
 	return !math.IsNaN(float64(bgc.x))
@@ -596,6 +606,8 @@ type Stage struct {
 	stageTime       int32
 	constants       map[string]float32
 	p1p3dist        float32
+	ver             [2]uint16
+	reload          bool
 }
 
 func newStage(def string) *Stage {
@@ -647,8 +659,24 @@ func loadStage(def string, main bool) (*Stage, error) {
 		s.nameLow = strings.ToLower(s.name)
 		s.displaynameLow = strings.ToLower(s.displayname)
 		s.authorLow = strings.ToLower(s.author)
-		if tmp, ok := sec[0].getString("attachedchar"); ok {
-			s.attachedchardef = append(s.attachedchardef, tmp)
+		s.ver = [2]uint16{}
+		if str, ok := sec[0]["mugenversion"]; ok {
+			for k, v := range SplitAndTrim(str, ".") {
+				if k >= len(s.ver) {
+					break
+				}
+				if v, err := strconv.ParseUint(v, 10, 16); err == nil {
+					s.ver[k] = uint16(v)
+				} else {
+					break
+				}
+			}
+		}
+		if sec[0].LoadFile("attachedchar", []string{def, "", sys.motifDir, "data/"}, func(filename string) error {
+			s.attachedchardef = append(s.attachedchardef, filename)
+			return nil
+		}); err != nil {
+			return nil, err
 		}
 		if main {
 			r, _ := regexp.Compile("^round[0-9]+def$")
@@ -657,10 +685,13 @@ func loadStage(def string, main bool) (*Stage, error) {
 					re := regexp.MustCompile("[0-9]+")
 					submatchall := re.FindAllString(k, -1)
 					if len(submatchall) == 1 {
-						var err error
-						sys.stageList[Atoi(submatchall[0])], err = loadStage(v, false)
-						if err != nil {
-							return nil, fmt.Errorf("Failed to load %v:\n%v\n", def, err)
+						if err := LoadFile(&v, []string{def, "", sys.motifDir, "data/"}, func(filename string) error {
+							if sys.stageList[Atoi(submatchall[0])], err = loadStage(filename, false); err != nil {
+								return fmt.Errorf("failed to load %v:\n%v", filename, err)
+							}
+							return nil
+						}); err != nil {
+							return nil, err
 						}
 					}
 				}
@@ -683,7 +714,9 @@ func loadStage(def string, main bool) (*Stage, error) {
 		sec[0].ReadF32("p1p3dist", &s.p1p3dist)
 	}
 	if sec := defmap["scaling"]; len(sec) > 0 {
-		sec[0].ReadF32("topscale", &s.stageCamera.ztopscale)
+		if s.ver[0] == 0 { //mugen 1.0+ removed support for topscale
+			sec[0].ReadF32("topscale", &s.stageCamera.ztopscale)
+		}
 	}
 	if sec := defmap["bound"]; len(sec) > 0 {
 		sec[0].ReadI32("screenleft", &s.screenleft)
@@ -720,7 +753,7 @@ func loadStage(def string, main bool) (*Stage, error) {
 		sec[0].ReadI32("floortension", &s.stageCamera.floortension)
 		sec[0].ReadI32("overdrawhigh", &s.stageCamera.overdrawhigh) //TODO: not implemented
 		sec[0].ReadI32("overdrawlow", &s.stageCamera.overdrawlow)
-		sec[0].ReadI32("cuthigh", &s.stageCamera.cuthigh)
+		sec[0].ReadI32("cuthigh", &s.stageCamera.cuthigh) //TODO: not implemented
 		sec[0].ReadI32("cutlow", &s.stageCamera.cutlow)
 		sec[0].ReadF32("startzoom", &s.stageCamera.startzoom)
 		if sys.gs.cam.ZoomMax == 0 {
@@ -728,9 +761,8 @@ func loadStage(def string, main bool) (*Stage, error) {
 		} else {
 			s.stageCamera.zoomin = sys.gs.cam.ZoomMax
 		}
-		sec[0].ReadF32("zoomout", &s.stageCamera.mugenZoomOut)
 		if sys.gs.cam.ZoomMin == 0 {
-			s.stageCamera.zoomout = s.stageCamera.mugenZoomOut
+			sec[0].ReadF32("zoomout", &s.stageCamera.zoomout)
 		} else {
 			s.stageCamera.zoomout = sys.gs.cam.ZoomMin
 		}
@@ -770,7 +802,7 @@ func loadStage(def string, main bool) (*Stage, error) {
 		sec[0].ReadI32("bgmtrigger.alt", &s.bgmtriggeralt)
 	}
 	if sec := defmap["bgdef"]; len(sec) > 0 {
-		if sec[0].LoadFile("spr", def, func(filename string) error {
+		if sec[0].LoadFile("spr", []string{def, "", sys.motifDir, "data/"}, func(filename string) error {
 			sff, err := loadSff(filename, false)
 			if err != nil {
 				return err
@@ -877,11 +909,6 @@ func loadStage(def string, main bool) (*Stage, error) {
 		} else {
 			//number of pixels into the bottom of the screen that may be cut from drawing when the screen aspect is shorter than the stage aspect
 			s.stageCamera.drawOffsetY -= float32(s.stageCamera.cutlow) * s.localscl
-			if s.stageCamera.cuthigh != math.MinInt32 {
-				//TODO: cuthigh part of the formula is likely not accurate
-				maxy := 0 - float32(s.stageCamera.localcoord[1]-240)*s.localscl
-				s.stageCamera.drawOffsetY += MinF(maxy, float32(s.stageCamera.cuthigh)*s.localscl)
-			}
 		}
 	}
 	s.mainstage = main
@@ -1020,18 +1047,18 @@ func (s *Stage) action() {
 	s.bga.action()
 	link, zlink := 0, -1
 	for i, b := range s.bg {
-		s.bg[i].bga.action()
-		if i > 0 && b.positionlink {
-			s.bg[i].bga.offset[0] += s.bg[link].bga.sinoffset[0]
-			s.bg[i].bga.offset[1] += s.bg[link].bga.sinoffset[1]
-		} else {
-			link = i
-		}
-		if s.zoffsetlink >= 0 && zlink < 0 && b.id == s.zoffsetlink {
-			zlink = i
-			s.bga.offset[1] += b.bga.offset[1]
-		}
 		if b.active {
+			s.bg[i].bga.action()
+			if i > 0 && b.positionlink {
+				s.bg[i].bga.offset[0] += s.bg[link].bga.sinoffset[0]
+				s.bg[i].bga.offset[1] += s.bg[link].bga.sinoffset[1]
+			} else {
+				link = i
+			}
+			if s.zoffsetlink >= 0 && zlink < 0 && b.id == s.zoffsetlink {
+				zlink = i
+				s.bga.offset[1] += b.bga.offset[1]
+			}
 			s.bg[i].anim.Action()
 		}
 	}
@@ -1088,7 +1115,7 @@ func (s *Stage) draw(top bool, x, y, scl float32) {
 			s.stageCamera.drawOffsetY)/480)
 	for _, b := range s.bg {
 		if b.visible && b.toplayer == top && b.anim.spr != nil {
-			b.draw(pos, scl, bgscl, s.localscl, s.scale, yofs)
+			b.draw(pos, scl, bgscl, s.localscl, s.scale, yofs, true)
 		}
 	}
 }
@@ -1105,4 +1132,36 @@ func (s *Stage) reset() {
 		s.bgct.add(&s.bgc[i])
 	}
 	s.stageTime = 0
+}
+
+func (s *Stage) modifyBGCtrl(id int32, t, v [3]int32, x, y float32) {
+	for i := range s.bgc {
+		if id == s.bgc[i].sctrlid {
+			if t[0] != IErr {
+				s.bgc[i].starttime = t[0]
+			}
+			if t[1] != IErr {
+				s.bgc[i].endtime = t[1]
+			}
+			if t[2] != IErr {
+				s.bgc[i].looptime = t[2]
+			}
+			if v[0] != IErr {
+				s.bgc[i].v[0] = v[0]
+			}
+			if v[1] != IErr {
+				s.bgc[i].v[1] = v[1]
+			}
+			if v[2] != IErr {
+				s.bgc[i].v[2] = v[2]
+			}
+			if !math.IsNaN(float64(x)) {
+				s.bgc[i].x = x
+			}
+			if !math.IsNaN(float64(y)) {
+				s.bgc[i].y = y
+			}
+			s.reload = true
+		}
+	}
 }

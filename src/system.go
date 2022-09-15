@@ -9,6 +9,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -26,8 +27,8 @@ import (
 )
 
 const (
-	MaxSimul        = 32
-	MaxAttachedChar = 2
+	MaxSimul        = 4
+	MaxAttachedChar = 1
 )
 
 var (
@@ -76,7 +77,7 @@ var sys = System{
 	audioClose:            make(chan bool, 1),
 	keyInput:              glfw.KeyUnknown,
 	comboExtraFrameWindow: 1,
-	fontShaderVer:         "150 core",
+	fontShaderVer:         120,
 	//FLAC_FrameWait:          -1,
 	luaSpriteScale:       1,
 	luaPortraitScale:     1,
@@ -86,8 +87,10 @@ var sys = System{
 	consoleRows:          15,
 	clipboardRows:        2,
 	pngFilter:            false,
-
-	maxBgmVolume: 0,
+	clsnDarken:           true,
+	maxBgmVolume:         100,
+	stereoEffects:        true,
+	panningRange:         30,
 }
 
 type TeamMode int32
@@ -204,7 +207,6 @@ type System struct {
 	lifeMul                 float32
 	team1VS2Life            float32
 	turnsRecoveryRate       float32
-	lifebarFontScale        float32
 	debugFont               *TextSprite
 	debugDraw               bool
 	debugRef                [2]int
@@ -345,7 +347,6 @@ type System struct {
 	lifeShare               [2]bool
 	loseSimul               bool
 	loseTag                 bool
-	fullscreen              bool
 	allowDebugKeys          bool
 	allowDebugMode          bool
 	commonAir               string
@@ -362,14 +363,20 @@ type System struct {
 	screenshotFolder        string
 	//FLAC_FrameWait          int
 
+	// Resolution variables
+	fullscreen            bool
+	fullscreenRefreshRate int32
+	fullscreenWidth       int32
+	fullscreenHeight      int32
+
 	controllerStickSensitivity float32
 	xinputTriggerSensitivity   float32
 
 	// Localcoord sceenpack
 	luaLocalcoord    [2]int32
-	luaSpriteScale   float64
+	luaSpriteScale   float32
 	luaPortraitScale float32
-	luaSpriteOffsetX float64
+	luaSpriteOffsetX float32
 
 	// Localcoord lifebar
 	lifebarScale         float32
@@ -380,7 +387,7 @@ type System struct {
 	// Shader Vars
 	postProcessingShader    int32
 	multisampleAntialiasing bool
-	fontShaderVer           string
+	fontShaderVer           uint
 
 	// External Shader Vars
 	externalShaderList  []string
@@ -394,14 +401,13 @@ type System struct {
 	// Rendering
 	borderless bool
 	vRetrace   int
+	pngFilter  bool // Controls the GL_TEXTURE_MAG_FILTER on 32bit sprites
 
 	gameMode        string
 	frameCounter    int32
 	motifDir        string
 	captureNum      int
 	roundType       [2]RoundType
-	ocd             [MaxSimul*2 + MaxAttachedChar]OverrideCharData
-	ratioLevel      [MaxSimul*2 + MaxAttachedChar]int32
 	timerStart      int32
 	timerRounds     []int32
 	scoreStart      [2]float32
@@ -431,10 +437,10 @@ type System struct {
 	noSoundFlg      bool
 	postMatchFlg    bool
 	brightnessOld   int32
-	// Controls the GL_TEXTURE_MAG_FILTER on 32bit sprites
-	pngFilter bool
-
-	maxBgmVolume int
+	clsnDarken      bool
+	maxBgmVolume    int
+	stereoEffects   bool
+	panningRange    float32
 }
 
 type Window struct {
@@ -444,103 +450,52 @@ type Window struct {
 	x, y, w, h int
 }
 
-var firstWindow = true
-
-func (s *System) newWindow(title string, fullscreen bool, w, h int, oldWindow *Window) (*Window, error) {
-	var err error
-	var window, oldW *glfw.Window
-	var x, y int
-
-	if oldWindow != nil {
-		oldW = oldWindow.Window
-		x, y = oldW.GetPos()
-	}
-
-	if fullscreen {
-		window, err = s.fullscreenWindow(w, h, title, nil, nil, oldW)
-		window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
-	} else {
-		window, err = glfw.CreateWindow(w, h, title, nil, oldW)
-		window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
-	}
-	chk(err)
-	if firstWindow {
-		x, y = window.GetPos()
-		window.MakeContextCurrent()
-		window.SetKeyCallback(keyCallback)
-		window.SetCharModsCallback(charCallback)
-		// V-Sync
-		if s.vRetrace != -1 {
-			glfw.SwapInterval(s.vRetrace)
-		}
-		// Initialize OpenGL.
-		chk(gl.Init())
-		firstWindow = false
-	}
-	ret := &Window{window, title, fullscreen, x, y, w, h}
-	return ret, err
-}
-func (s *System) fullscreenWindow(w, h int, title string, monitor *glfw.Monitor,
-	mode *glfw.VidMode, oldWindow *glfw.Window) (*glfw.Window, error) {
+func (s *System) newWindow(w, h int) (*Window, error) {
 	var err error
 	var window *glfw.Window
-
-	if monitor == nil {
-		if monitor = glfw.GetPrimaryMonitor(); monitor == nil {
-			return nil, fmt.Errorf("failed to obtain primary monitor")
+	var monitor *glfw.Monitor
+	if monitor = glfw.GetPrimaryMonitor(); monitor == nil {
+		return nil, fmt.Errorf("failed to obtain primary monitor")
+	}
+	mode := monitor.GetVideoMode()
+	x, y := (mode.Width-w)/2, (mode.Height-h)/2
+	if s.fullscreen {
+		if window, err = glfw.CreateWindow(w, h, s.windowTitle, monitor, nil); err != nil {
+			return nil, fmt.Errorf("failed to create window: %w", err)
 		}
-	}
-	//if mode == nil {
-	//	if mode = monitor.GetVideoMode(); mode == nil {
-	//		return nil, fmt.Errorf("failed to obtain video mode")
-	//	}
-	//}
-	if runtime.GOOS == "windows" && s.borderless {
-		window, err = glfw.CreateWindow(w, h, title, nil, oldWindow)
-		window.SetAttrib(glfw.Decorated, 0)
-		window.SetPos(0, 0)
-		window.SetSize(w, h)
+		if runtime.GOOS == "windows" && s.borderless {
+			window.SetAttrib(glfw.Decorated, 0)
+			window.SetPos(0, 0)
+			window.SetSize(w, h)
+		}
+		window.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
 	} else {
-		//window, err = glfw.CreateWindow(mode.Width, mode.Height, title, monitor, oldWindow)
-		window, err = glfw.CreateWindow(w, h, title, monitor, oldWindow)
+		if window, err = glfw.CreateWindow(w, h, s.windowTitle, nil, nil); err != nil {
+			return nil, fmt.Errorf("failed to create window: %w", err)
+		}
+		window.SetPos(x, y)
+		window.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to create window: %w", err)
-	}
-	return window, nil
+	window.MakeContextCurrent()
+	window.SetKeyCallback(keyCallback)
+	window.SetCharModsCallback(charCallback)
+	ret := &Window{window, s.windowTitle, s.fullscreen, x, y, w, h}
+	return ret, err
 }
 
-// Unused.
-// TODO: Check on what this was used.
-//func (w *Window) destroy() {
-//	w.Window.Destroy()
-//}
 func (w *Window) toggleFullscreen() {
 	if w.fullscreen {
 		w.SetMonitor(nil, w.x, w.y, w.w, w.h, 60)
 		w.SetInputMode(glfw.CursorMode, glfw.CursorNormal)
 	} else {
+		w.x, w.y = w.GetPos()
 		w.SetMonitor(glfw.GetPrimaryMonitor(), w.x, w.y, w.w, w.h, 60)
 		w.SetInputMode(glfw.CursorMode, glfw.CursorHidden)
 	}
-	w.fullscreen = !w.fullscreen
-}
-
-type OverrideCharData struct {
-	life        int32
-	lifeMax     int32
-	power       int32
-	dizzyPoints int32
-	guardPoints int32
-	lifeRatio   float32
-	attackRatio float32
-}
-
-func (s *System) resetOverrideCharData() {
-	for i := range s.ocd {
-		s.ocd[i] = OverrideCharData{life: 0, lifeMax: 0, power: 0,
-			dizzyPoints: 0, guardPoints: 0, lifeRatio: 1.0, attackRatio: 1.0}
+	if sys.vRetrace != -1 {
+		glfw.SwapInterval(sys.vRetrace)
 	}
+	w.fullscreen = !w.fullscreen
 }
 
 // Initialize stuff, this is called after the config int at main.go
@@ -551,11 +506,18 @@ func (s *System) init(w, h int32) *lua.LState {
 	glfw.WindowHint(glfw.Resizable, glfw.False)
 	glfw.WindowHint(glfw.ContextVersionMajor, 2)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
+	s.window, err = s.newWindow(int(s.scrrect[2]), int(s.scrrect[3]))
+	chk(err)
 
-	s.window, err = sys.newWindow(s.windowTitle, s.fullscreen, int(s.scrrect[2]), int(s.scrrect[3]), nil)
+	// V-Sync
+	if s.vRetrace >= 0 {
+		glfw.SwapInterval(s.vRetrace)
+	}
+	// Initialize OpenGL.
+	chk(gl.Init())
 
-	// Check if the shader selected is currently avalible.
-	if s.postProcessingShader < int32(len(s.externalShaderList))+3 {
+	// Check if the shader selected is currently available.
+	if s.postProcessingShader < int32(len(s.externalShaderList)) {
 		s.postProcessingShader = 0
 	}
 
@@ -610,7 +572,6 @@ func (s *System) init(w, h int32) *lua.LState {
 	s.clsnSpr = *newSprite()
 	s.clsnSpr.Size, s.clsnSpr.Pal = [...]uint16{1, 1}, make([]uint32, 256)
 	s.clsnSpr.SetPxl([]byte{0})
-	s.resetOverrideCharData()
 	systemScriptInit(l)
 	s.shortcutScripts = make(map[ShortcutKey]*ShortcutScript)
 	// So now that we have a window we add a icon.
@@ -801,9 +762,11 @@ func (s *System) soundWrite() {
 func (s *System) playSound() {
 	if s.mixer.write() {
 		s.sounds.mixSounds()
-		for pn := range s.gs.chars {
-			for _, c := range s.getPlayerEtAl(pn) {
-				c.sounds.mixSounds()
+		if !s.noSoundFlg {
+			for pn := range s.gs.chars {
+				for _, c := range s.getPlayerEtAl(pn) {
+					c.sounds.mixSounds()
+				}
 			}
 		}
 	}
@@ -1178,7 +1141,8 @@ func (s *System) commandUpdate() {
 	for i, p := range s.gs.chars {
 		if len(p) > 0 {
 			r := s.getChar(i, 0)
-			if r.ctrlOver() || r.sf(CSF_noinput) {
+			if (r.ctrlOver() && !r.sf(CSF_postroundinput)) || r.sf(CSF_noinput) ||
+				(r.aiLevel() > 0 && !r.alive()) {
 				for j := range r.cmd {
 					r.cmd[j].BufReset()
 				}
@@ -1197,7 +1161,7 @@ func (s *System) commandUpdate() {
 			for _, c := range s.getPlayerEtAl(i) {
 				if (c.helperIndex == 0 ||
 					c.helperIndex > 0 && &c.cmd[0] != &r.cmd[0]) &&
-					c.cmd[0].Input(c.key, int32(c.facing), sys.com[i]) {
+					c.cmd[0].Input(c.key, int32(c.facing), sys.com[i], c.inputFlag) {
 					hp := c.hitPause() && c.gi().constants["input.pauseonhitpause"] != 0
 					buftime := Btoi(hp && c.gi().ver[0] != 1)
 					if s.super > 0 {
@@ -1526,7 +1490,7 @@ func (s *System) action(x, y *float32, scl float32) (leftest, rightest,
 					s.winType[0], s.winType[1] = WT_T, WT_T
 				}
 			}
-			if s.intro == -1 && (ko[0] || ko[1]) {
+			if s.intro == 0 && (ko[0] || ko[1]) {
 				if ko[0] && ko[1] {
 					s.finish, s.winTeam = FT_DKO, -1
 				} else {
@@ -1602,6 +1566,9 @@ func (s *System) action(x, y *float32, scl float32) (leftest, rightest,
 							for i, win := range w {
 								if win {
 									s.lifebar.wi[i].add(s.winType[i])
+									if s.matchOver() && s.wins[i] > s.wins[^i&1] {
+										s.lifebar.wc[i].wins += 1
+									}
 								}
 							}
 						} else {
@@ -1653,9 +1620,7 @@ func (s *System) action(x, y *float32, scl float32) (leftest, rightest,
 		}
 		s.turbo = spd
 	}
-	if !s.noSoundFlg {
-		s.playSound()
-	}
+	s.playSound()
 	if introSkip {
 		sclMul = 1 / scl
 	}
@@ -1693,6 +1658,7 @@ func (s *System) draw(x, y, scl float32) {
 			}
 			s.stage.draw(false, bgx, bgy, scl)
 		}
+		s.bottomSprites.draw(x, y, scl*s.gs.cam.BaseScale())
 		if !s.sf(GSF_globalnoshadow) {
 			if s.stage.reflection > 0 {
 				s.shadows.drawReflection(x, y, scl*s.gs.cam.BaseScale())
@@ -1732,7 +1698,6 @@ func (s *System) draw(x, y, scl float32) {
 			rect[0] = s.scrrect[2] - rect[2]
 			fade(rect, 0, 255)
 		}
-		s.bottomSprites.draw(x, y, scl*s.gs.cam.BaseScale())
 		s.lifebar.draw(-1)
 		s.lifebar.draw(0)
 	} else {
@@ -1770,10 +1735,9 @@ func (s *System) drawTop() {
 	} else if s.fadeouttime > 0 && fadeout < s.fadeouttime-1 && !s.dialogueFlg {
 		fade(s.scrrect, s.lifebar.ro.fadeout_col, 256*(s.lifebar.ro.fadeout_time-s.fadeouttime)/s.lifebar.ro.fadeout_time)
 		s.fadeouttime--
-	} // ToDo: Add this back as a option.
-	/*else if s.clsnDraw {
+	} else if s.clsnDraw && s.clsnDarken {
 		fade(s.scrrect, 0, 0)
-	}*/
+	}
 	if s.shuttertime > 0 {
 		rect := s.scrrect
 		rect[3] = s.shuttertime * ((s.scrrect[3] + 1) >> 1) / s.lifebar.ro.shutter_time
@@ -1800,7 +1764,7 @@ func (s *System) drawDebug() {
 		for txt != "" {
 			w, drawTxt := int32(0), ""
 			for i, r := range txt {
-				w += s.debugFont.fnt.CharWidth(r) + s.debugFont.fnt.Spacing[0]
+				w += s.debugFont.fnt.CharWidth(r, 0) + s.debugFont.fnt.Spacing[0]
 				if w > s.scrrect[2] {
 					drawTxt, txt = txt[:i], txt[i:]
 					break
@@ -1812,7 +1776,7 @@ func (s *System) drawDebug() {
 			*y += float32(s.debugFont.fnt.Size[1]) * s.debugFont.yscl / s.heightScale
 			s.debugFont.fnt.Print(drawTxt, *x, *y, s.debugFont.xscl/s.widthScale,
 				s.debugFont.yscl/s.heightScale, 0, 1, &s.scrrect,
-				s.debugFont.palfx, s.debugFont.frgba)
+				s.debugFont.palfx, s.debugFont.frgba, true)
 		}
 	}
 	if s.debugDraw {
@@ -1888,7 +1852,7 @@ func (s *System) drawDebug() {
 			s.debugFont.SetColor(t.r, t.g, t.b)
 			s.debugFont.fnt.Print(t.text, t.x, t.y, s.debugFont.xscl/s.widthScale,
 				s.debugFont.yscl/s.heightScale, 0, 0, &s.scrrect,
-				s.debugFont.palfx, s.debugFont.frgba)
+				s.debugFont.palfx, s.debugFont.frgba, true)
 		}
 	}
 }
@@ -2012,7 +1976,7 @@ func (s *System) fight() (reload bool) {
 		if p != nil {
 			// Get max life, and adjust based on team mode
 			var lm float32
-			if p.ocd().lifeMax != 0 {
+			if p.ocd().lifeMax != -1 {
 				lm = float32(p.ocd().lifeMax) * p.ocd().lifeRatio * s.lifeMul
 			} else {
 				lm = float32(p.gi().data.life) * p.ocd().lifeRatio * s.lifeMul
@@ -2072,7 +2036,7 @@ func (s *System) fight() (reload bool) {
 				p.life = Min(p.lifeMax, int32(math.Ceil(foo*float64(p.life))))
 			} else if s.round == 1 || s.tmode[i&1] == TM_Turns {
 				/* If round 1 or a new character in turns mode, initialize values */
-				if p.ocd().life != 0 {
+				if p.ocd().life != -1 {
 					p.life = p.ocd().life
 				} else {
 					p.life = p.lifeMax
@@ -2080,8 +2044,10 @@ func (s *System) fight() (reload bool) {
 				if s.round == 1 {
 					if s.maxPowerMode {
 						p.power = p.powerMax
+					} else if p.ocd().power != -1 {
+						p.power = p.ocd().power
 					} else {
-						p.power = p.ocd().power //p.power = 0
+						p.power = 0
 					}
 				}
 				p.dialogue = []string{}
@@ -2097,12 +2063,12 @@ func (s *System) fight() (reload bool) {
 				p.nextHitScale = make(map[int32][3]*HitScale)
 			}
 
-			if p.ocd().guardPoints != 0 {
+			if p.ocd().guardPoints != -1 {
 				p.guardPoints = p.ocd().guardPoints
 			} else {
 				p.guardPoints = p.guardPointsMax
 			}
-			if p.ocd().dizzyPoints != 0 {
+			if p.ocd().dizzyPoints != -1 {
 				p.dizzyPoints = p.ocd().dizzyPoints
 			} else {
 				p.dizzyPoints = p.dizzyPointsMax
@@ -2191,6 +2157,7 @@ func (s *System) fight() (reload bool) {
 					tmp.RawSetString("winquote", lua.LNumber(p.winquote))
 					tmp.RawSetString("aiLevel", lua.LNumber(p.aiLevel()))
 					tmp.RawSetString("palno", lua.LNumber(p.palno()))
+					tmp.RawSetString("ratiolevel", lua.LNumber(p.ocd().ratioLevel))
 					tmp.RawSetString("win", lua.LBool(p.win()))
 					tmp.RawSetString("winKO", lua.LBool(p.winKO()))
 					tmp.RawSetString("winTime", lua.LBool(p.winTime()))
@@ -2465,8 +2432,6 @@ type SelectChar struct {
 	name           string
 	lifebarname    string
 	author         string
-	sprite         string
-	anim           string
 	sound          string
 	intro          string
 	ending         string
@@ -2478,18 +2443,24 @@ type SelectChar struct {
 	pal_keymap     []int32
 	localcoord     int32
 	portrait_scale float32
+	cns_scale      [2]float32
 	anims          PreloadedAnims
 	sff            *Sff
+	fnt            [10]*Fnt
 }
 
 func newSelectChar() *SelectChar {
-	return &SelectChar{localcoord: 320, portrait_scale: 1, anims: NewPreloadedAnims()}
+	return &SelectChar{
+		localcoord:     320,
+		portrait_scale: 1,
+		cns_scale:      [...]float32{1, 1},
+		anims:          NewPreloadedAnims(),
+	}
 }
 
 type SelectStage struct {
 	def             string
 	name            string
-	spr             string
 	attachedchardef string
 	stagebgm        IniSection
 	portrait_scale  float32
@@ -2501,6 +2472,22 @@ func newSelectStage() *SelectStage {
 	return &SelectStage{portrait_scale: 1, anims: NewPreloadedAnims()}
 }
 
+type OverrideCharData struct {
+	life        int32
+	lifeMax     int32
+	power       int32
+	dizzyPoints int32
+	guardPoints int32
+	ratioLevel  int32
+	lifeRatio   float32
+	attackRatio float32
+}
+
+func newOverrideCharData() *OverrideCharData {
+	return &OverrideCharData{life: -1, lifeMax: -1, power: -1, dizzyPoints: -1,
+		guardPoints: -1, ratioLevel: 0, lifeRatio: 1, attackRatio: 1}
+}
+
 type Select struct {
 	charlist           []SelectChar
 	stagelist          []SelectStage
@@ -2510,14 +2497,16 @@ type Select struct {
 	stageAnimPreload   []int32
 	charSpritePreload  map[[2]int16]bool
 	stageSpritePreload map[[2]int16]bool
-	cdefOverwrite      [MaxSimul * 2]string
+	cdefOverwrite      map[int]string
 	sdefOverwrite      string
+	ocd                [3][]OverrideCharData
 }
 
 func newSelect() *Select {
 	return &Select{selectedStageNo: -1,
 		charSpritePreload: map[[2]int16]bool{[...]int16{9000, 0}: true,
-			[...]int16{9000, 1}: true}, stageSpritePreload: make(map[[2]int16]bool)}
+			[...]int16{9000, 1}: true}, stageSpritePreload: make(map[[2]int16]bool),
+		cdefOverwrite: make(map[int]string)}
 }
 func (s *Select) GetCharNo(i int) int {
 	n := i
@@ -2573,12 +2562,16 @@ func (s *Select) addChar(def string) {
 	} else {
 		def += ".def"
 	}
-	if strings.ToLower(def[0:6]) != "chars/" && strings.ToLower(def[1:3]) != ":/" && (def[0] != '/' || idx > 0 && !strings.Contains(def[:idx], ":")) {
-		def = "chars/" + def
-	}
-	if def = FileExist(def); len(def) == 0 {
-		sc.name = "dummyslot"
-		return
+	if chk := FileExist(def); len(chk) != 0 {
+		def = chk
+	} else {
+		if strings.ToLower(def[0:6]) != "chars/" && strings.ToLower(def[1:3]) != ":/" && (def[0] != '/' || idx > 0 && !strings.Contains(def[:idx], ":")) {
+			def = "chars/" + def
+		}
+		if def = FileExist(def); len(def) == 0 {
+			sc.name = "dummyslot"
+			return
+		}
 	}
 	str, err := LoadText(def)
 	if err != nil {
@@ -2587,7 +2580,8 @@ func (s *Select) addChar(def string) {
 	}
 	sc.def = def
 	lines, i, info, files, keymap, arcade := SplitAndTrim(str, "\n"), 0, true, true, true, true
-	var movelist string
+	var cns, sprite, anim, movelist string
+	var fnt [10][2]string
 	for i < len(lines) {
 		is, name, subname := ReadIniSection(lines, &i)
 		switch name {
@@ -2611,8 +2605,9 @@ func (s *Select) addChar(def string) {
 		case "files":
 			if files {
 				files = false
-				sc.sprite = is["sprite"]
-				sc.anim = is["anim"]
+				cns = is["cns"]
+				sprite = is["sprite"]
+				anim = is["anim"]
 				sc.sound = is["sound"]
 				for i := 1; i <= MaxPalNo; i++ {
 					if is[fmt.Sprintf("pal%v", i)] != "" {
@@ -2620,6 +2615,10 @@ func (s *Select) addChar(def string) {
 					}
 				}
 				movelist = is["movelist"]
+				for i := range fnt {
+					fnt[i][0] = is[fmt.Sprintf("font%v", i)]
+					fnt[i][1] = is[fmt.Sprintf("fnt_height%v", i)]
+				}
 			}
 		case "palette ":
 			if keymap &&
@@ -2648,8 +2647,30 @@ func (s *Select) addChar(def string) {
 		listSpr[[...]int16{k[0], k[1]}] = true
 	}
 	sff := newSff()
+	//read size values
+	LoadFile(&cns, []string{def, "", "data/"}, func(filename string) error {
+		str, err := LoadText(filename)
+		if err != nil {
+			return err
+		}
+		lines, i := SplitAndTrim(str, "\n"), 0
+		for i < len(lines) {
+			is, name, _ := ReadIniSection(lines, &i)
+			switch name {
+			case "size":
+				if ok := is.ReadF32("xscale", &sc.cns_scale[0]); !ok {
+					sc.cns_scale[0] = 320 / float32(sc.localcoord)
+				}
+				if ok := is.ReadF32("yscale", &sc.cns_scale[1]); !ok {
+					sc.cns_scale[1] = 320 / float32(sc.localcoord)
+				}
+				return nil
+			}
+		}
+		return nil
+	})
 	//preload animations
-	LoadFile(&sc.anim, def, func(filename string) error {
+	LoadFile(&anim, []string{def, "", "data/"}, func(filename string) error {
 		str, err := LoadText(filename)
 		if err != nil {
 			return err
@@ -2667,16 +2688,16 @@ func (s *Select) addChar(def string) {
 		return nil
 	})
 	//preload portion of sff file
-	fp := SearchFile("preload.sff", def, false)
+	fp := fmt.Sprintf("%v_preload.sff", strings.TrimSuffix(def, filepath.Ext(def)))
 	if fp = FileExist(fp); len(fp) == 0 {
-		fp = sc.sprite
+		fp = sprite
 	}
-	LoadFile(&fp, def, func(file string) error {
+	LoadFile(&fp, []string{def, "", "data/"}, func(file string) error {
 		var selPal []int32
 		var err error
 		sc.sff, selPal, err = preloadSff(file, true, listSpr)
 		if err != nil {
-			panic(fmt.Errorf("Failed to load %v: %v\nError preloading %v\n", file, err, def))
+			panic(fmt.Errorf("failed to load %v: %v\nerror preloading %v", file, err, def))
 		}
 		sc.anims.updateSff(sc.sff)
 		for k := range s.charSpritePreload {
@@ -2687,11 +2708,28 @@ func (s *Select) addChar(def string) {
 		}
 		return nil
 	})
+	//read movelist
 	if len(movelist) > 0 {
-		LoadFile(&movelist, def, func(file string) error {
+		LoadFile(&movelist, []string{def, "", "data/"}, func(file string) error {
 			sc.movelist, _ = LoadText(file)
 			return nil
 		})
+	}
+	//preload fonts
+	for i, f := range fnt {
+		if len(f[0]) > 0 {
+			LoadFile(&f[0], []string{def, sys.motifDir, "", "data/", "font/"}, func(filename string) error {
+				var err error
+				var height int32 = -1
+				if len(f[1]) > 0 {
+					height = Atoi(f[1])
+				}
+				if sc.fnt[i], err = loadFnt(filename, height); err != nil {
+					sys.errLog.Printf("failed to load %v (char font): %v", filename, err)
+				}
+				return nil
+			})
+		}
 	}
 }
 func (s *Select) AddStage(def string) error {
@@ -2701,7 +2739,7 @@ func (s *Select) AddStage(def string) error {
 		sys.loadTime(tnow, tstr, false, false)
 	}()
 	var lines []string
-	if err := LoadFile(&def, "stages/", func(file string) error {
+	if err := LoadFile(&def, []string{"", "data/"}, func(file string) error {
 		str, err := LoadText(file)
 		if err != nil {
 			return err
@@ -2709,10 +2747,12 @@ func (s *Select) AddStage(def string) error {
 		lines = SplitAndTrim(str, "\n")
 		return nil
 	}); err != nil {
+		sys.errLog.Printf("Failed to add stage, file not found: %v\n", def)
 		return err
 	}
 	tstr = fmt.Sprintf("Stage added: %v", def)
 	i, info, music, bgdef, stageinfo := 0, true, true, true, true
+	var spr string
 	s.stagelist = append(s.stagelist, *newSelectStage())
 	ss := &s.stagelist[len(s.stagelist)-1]
 	ss.def = def
@@ -2728,7 +2768,12 @@ func (s *Select) AddStage(def string) error {
 						ss.name = def
 					}
 				}
-				ss.attachedchardef, _ = is.getString("attachedchar")
+				if err := is.LoadFile("attachedchar", []string{def, "", sys.motifDir, "data/"}, func(filename string) error {
+					ss.attachedchardef = filename
+					return nil
+				}); err != nil {
+					return nil
+				}
 			}
 		case "music":
 			if music {
@@ -2738,7 +2783,7 @@ func (s *Select) AddStage(def string) error {
 		case "bgdef":
 			if bgdef {
 				bgdef = false
-				ss.spr = is["spr"]
+				spr = is["spr"]
 			}
 		case "stageinfo":
 			if stageinfo {
@@ -2769,11 +2814,11 @@ func (s *Select) AddStage(def string) error {
 			}
 		}
 		//preload portion of sff file
-		LoadFile(&ss.spr, def, func(file string) error {
+		LoadFile(&spr, []string{def, "", "data/"}, func(file string) error {
 			var err error
 			ss.sff, _, err = preloadSff(file, false, listSpr)
 			if err != nil {
-				panic(fmt.Errorf("Failed to load %v: %v\nError preloading %v\n", file, err, def))
+				panic(fmt.Errorf("failed to load %v: %v\nerror preloading %v", file, err, def))
 			}
 			ss.anims.updateSff(ss.sff)
 			for k := range s.stageSpritePreload {
@@ -2799,12 +2844,14 @@ func (s *Select) AddSelectedChar(tn, cn, pl int) bool {
 	}
 	sys.loadMutex.Lock()
 	s.selected[tn] = append(s.selected[tn], [...]int{n, pl})
+	s.ocd[tn] = append(s.ocd[tn], *newOverrideCharData())
 	sys.loadMutex.Unlock()
 	return true
 }
 func (s *Select) ClearSelected() {
 	sys.loadMutex.Lock()
 	s.selected = [2][][2]int{}
+	s.ocd = [3][]OverrideCharData{}
 	sys.loadMutex.Unlock()
 	s.selectedStageNo = -1
 }
@@ -2887,6 +2934,7 @@ func (l *Loader) loadChar(pn int) int {
 		if sys.com[pn] != 0 {
 			p.key ^= -1
 		}
+		p.clearCachedData()
 
 		sys.gs.appendChar(p)
 	} else {
@@ -2936,31 +2984,28 @@ func (l *Loader) loadChar(pn int) int {
 		fa.numko, fa.teammate_face, fa.teammate_scale = 0, make([]*Sprite, nsel), make([]float32, nsel)
 		sys.lifebar.nm[sys.tmode[pn&1]][pn].numko = 0
 		for i, ci := range idx {
-			sprite := sys.sel.charlist[ci].sprite
-			LoadFile(&sprite, sys.sel.charlist[ci].def, func(file string) error {
-				fa.teammate_scale[i] = sys.sel.charlist[ci].portrait_scale
-				var err error
-				fa.teammate_face[i] = sys.sel.charlist[ci].sff.GetSprite(int16(fa.teammate_face_spr[0]),
-					int16(fa.teammate_face_spr[1]))
-				return err
-			})
+			fa.teammate_scale[i] = sys.sel.charlist[ci].portrait_scale
+			fa.teammate_face[i] = sys.sel.charlist[ci].sff.GetSprite(int16(fa.teammate_face_spr[0]),
+				int16(fa.teammate_face_spr[1]))
 		}
 	}
 	return 1
 }
 
-func (l *Loader) loadAttachedChar(pn int) int {
-	atcpn := pn - MaxSimul*2
+func (l *Loader) loadAttachedChar(atcpn int) int {
+	pn := atcpn + MaxSimul*2
 	var tstr string
 	tnow := time.Now()
 	defer func() {
 		sys.loadTime(tnow, tstr, false, true)
 	}()
+	sys.sel.ocd[2] = append(sys.sel.ocd[2], *newOverrideCharData())
 	cdef := sys.stageList[0].attachedchardef[atcpn]
 	var p *Char
 	if len(sys.gs.chars[pn]) > 0 && cdef == sys.cgi[pn].def {
 		p = sys.getChar(pn, 0)
 		//p.key = -pn
+		p.clearCachedData()
 		
 		sys.gs.appendChar(p)
 	} else {
@@ -3020,12 +3065,18 @@ func (l *Loader) loadStage() bool {
 		if sys.sel.sdefOverwrite != "" {
 			def = sys.sel.sdefOverwrite
 		}
-		if sys.stage != nil && sys.stage.def == def && sys.stage.mainstage {
+		if sys.stage != nil && sys.stage.def == def && sys.stage.mainstage && !sys.stage.reload {
+			for i := range sys.stageList[0].attachedchardef {
+				l.loadAttachedChar(i)
+			}
 			return true
 		}
 		sys.stageList = make(map[int32]*Stage)
 		sys.stageLoop = false
 		sys.stageList[0], l.err = loadStage(def, true)
+		for i := range sys.stageList[0].attachedchardef {
+			l.loadAttachedChar(i)
+		}
 		sys.stage = sys.stageList[0]
 	}
 	return l.err == nil
@@ -3042,22 +3093,10 @@ func (l *Loader) load() {
 		return true
 	}
 	for !stageDone || !allCharDone() {
-		if !stageDone && sys.sel.selectedStageNo >= 0 {
-			if !l.loadStage() {
-				l.state = LS_Error
-				return
-			}
-			stageDone = true
-		}
+		// Load chars
 		for i, b := range charDone {
 			if !b {
-				result := -1
-				if i < len(sys.gs.chars)-MaxAttachedChar ||
-					len(sys.stageList[0].attachedchardef) <= i-MaxSimul*2 {
-					result = l.loadChar(i)
-				} else {
-					result = l.loadAttachedChar(i)
-				}
+				result := l.loadChar(i)
 				if result > 0 {
 					charDone[i] = true
 				} else if result < 0 {
@@ -3066,14 +3105,28 @@ func (l *Loader) load() {
 				}
 			}
 		}
-		for i := 0; i < 2; i++ {
-			if !charDone[i+2] && len(sys.sel.selected[i]) > 0 &&
-				sys.tmode[i] != TM_Simul && sys.tmode[i] != TM_Tag {
-				for j := i + 2; j < len(sys.gs.chars); j += 2 {
-					if !charDone[j] {
-						sys.gs.removeCharSlice(sys.gs.chars[j]...)
-						sys.gs.chars[j], sys.cgi[j].states, charDone[j] = nil, nil, true
-						sys.cgi[j].wakewakaLength = 0
+		// Load stage and attached char
+		if !stageDone && sys.sel.selectedStageNo >= 0 {
+			if !l.loadStage() {
+				l.state = LS_Error
+				return
+			}
+			stageDone = true
+		}
+		// Clear unused chars data
+		if stageDone {
+			for i := 0; i < 2; i++ {
+				if !charDone[i+2] && len(sys.sel.selected[i]) > 0 &&
+					sys.tmode[i] != TM_Simul && sys.tmode[i] != TM_Tag {
+					for j := i + 2; j < len(sys.gs.chars); j += 2 {
+						if !charDone[j] {
+							if j < len(sys.gs.chars)-len(sys.stageList[0].attachedchardef) {
+								sys.gs.removeCharSlice(sys.gs.chars[j]...)
+								sys.gs.chars[j], sys.cgi[j].states = nil, nil
+								sys.cgi[j].wakewakaLength = 0
+							}
+							charDone[j] = true
+						}
 					}
 				}
 			}

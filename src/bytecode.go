@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/gob"
 	"math"
 	"os"
@@ -426,6 +427,7 @@ const (
 	OC_ex_dizzypoints
 	OC_ex_dizzypointsmax
 	OC_ex_firstattack
+	OC_ex_framespercount
 	OC_ex_float
 	OC_ex_gamemode
 	OC_ex_getplayerid
@@ -460,6 +462,7 @@ const (
 	OC_ex_score
 	OC_ex_scoretotal
 	OC_ex_selfstatenoexist
+	OC_ex_sprpriority
 	OC_ex_stagebackedge
 	OC_ex_stagefrontedge
 	OC_ex_stagetime
@@ -469,6 +472,9 @@ const (
 	OC_ex_timeelapsed
 	OC_ex_timeremaining
 	OC_ex_timetotal
+	OC_ex_pos_z
+	OC_ex_vel_z
+	OC_ex_jugglepoints
 )
 const (
 	NumVar     = OC_sysvar0 - OC_var0
@@ -593,6 +599,12 @@ func (bs *BytecodeStack) Alloc(size int) []BytecodeValue {
 }
 
 type BytecodeExp []OpCode
+
+func Float32frombytes(bytes []byte) float32 {
+	bits := binary.LittleEndian.Uint32(bytes)
+	float := math.Float32frombits(bits)
+	return float
+}
 
 func (be *BytecodeExp) append(op ...OpCode) {
 	*be = append(*be, op...)
@@ -962,7 +974,13 @@ func (be BytecodeExp) run(c *Char) BytecodeValue {
 			sys.bcStack.PushI(*(*int32)(unsafe.Pointer(&be[i])))
 			i += 4
 		case OC_float:
-			sys.bcStack.PushF(*(*float32)(unsafe.Pointer(&be[i])))
+			arr := make([]byte, 4)
+			arr[0] = byte(be[i])
+			arr[1] = byte(be[i+1])
+			arr[2] = byte(be[i+2])
+			arr[3] = byte(be[i+3])
+			flo := Float32frombytes(arr)
+			sys.bcStack.PushF(flo)
 			i += 4
 		case OC_neg:
 			be.neg(sys.bcStack.Top())
@@ -1638,7 +1656,7 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 	case OC_ex_const480p:
 		*sys.bcStack.Top() = c.constp(640, sys.bcStack.Top().ToF())
 	case OC_ex_const720p:
-		*sys.bcStack.Top() = c.constp(960, sys.bcStack.Top().ToF())
+		*sys.bcStack.Top() = c.constp(1280, sys.bcStack.Top().ToF())
 	case OC_ex_gethitvar_animtype:
 		sys.bcStack.PushI(int32(c.gethitAnimtype()))
 	case OC_ex_gethitvar_airtype:
@@ -1747,6 +1765,8 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 		sys.bcStack.PushI(c.gi().drawpalno)
 	case OC_ex_firstattack:
 		sys.bcStack.PushB(c.firstAttack)
+	case OC_ex_framespercount:
+		sys.bcStack.PushI(sys.lifebar.ti.framespercount)
 	case OC_ex_float:
 		*sys.bcStack.Top() = BytecodeFloat(sys.bcStack.Top().ToF())
 	case OC_ex_gamemode:
@@ -1813,7 +1833,7 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 	case OC_ex_rank:
 		sys.bcStack.PushF(c.rank())
 	case OC_ex_ratiolevel:
-		sys.bcStack.PushI(c.ratioLevel())
+		sys.bcStack.PushI(c.ocd().ratioLevel)
 	case OC_ex_receiveddamage:
 		sys.bcStack.PushI(c.comboDmg)
 	case OC_ex_receivedhits:
@@ -1831,6 +1851,8 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 		sys.bcStack.PushF(c.scoreTotal())
 	case OC_ex_selfstatenoexist:
 		*sys.bcStack.Top() = c.selfStatenoExist(*sys.bcStack.Top())
+	case OC_ex_sprpriority:
+		sys.bcStack.PushI(c.sprPriority)
 	case OC_ex_stagebackedge:
 		sys.bcStack.PushF(c.stageBackEdge())
 	case OC_ex_stagefrontedge:
@@ -1849,6 +1871,12 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 		sys.bcStack.PushI(timeRemaining())
 	case OC_ex_timetotal:
 		sys.bcStack.PushI(timeTotal())
+	case OC_ex_pos_z:
+		sys.bcStack.PushF(c.pos[2] * c.localscl / oc.localscl)
+	case OC_ex_vel_z:
+		sys.bcStack.PushF(c.vel[2] * c.localscl / oc.localscl)
+	case OC_ex_jugglepoints:
+		sys.bcStack.PushI(c.juggle)
 	default:
 		sys.errLog.Printf("%v\n", be[*i-1])
 		c.panic()
@@ -2268,6 +2296,7 @@ func (sc playSnd) Run(c *Char, _ []int32) bool {
 		case playSnd_redirectid:
 			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
 				crun = rid
+				x = &crun.pos[0]
 			} else {
 				return false
 			}
@@ -2965,6 +2994,10 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 			}
 		case explod_anim:
 			e.setAnim(crun.getAnim(exp[1].evalI(c), exp[0].evalB(c), false))
+			if !e.anim.nilAnim && exp[0].evalB(c) { // ffx
+				e.anim.start_scale[0] /= crun.localscl
+				e.anim.start_scale[1] /= crun.localscl
+			}
 		case explod_angle:
 			e.angle = exp[0].evalF(c)
 		case explod_yangle:
@@ -3168,6 +3201,10 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 				eachExpl(func(e *Explod) { e.alpha = [...]int32{s, d} })
 			case explod_anim:
 				anim := crun.getAnim(exp[1].evalI(c), exp[0].evalB(c), false)
+				if anim != nil && exp[0].evalB(c) { // ffx
+					anim.start_scale[0] /= crun.localscl
+					anim.start_scale[1] /= crun.localscl
+				}
 				eachExpl(func(e *Explod) { e.setAnim(anim) })
 			case explod_angle:
 				a := exp[0].evalF(c)
@@ -3246,6 +3283,10 @@ func (sc gameMakeAnim) Run(c *Char, _ []int32) bool {
 			e.ontop = !exp[0].evalB(c)
 		case gameMakeAnim_anim:
 			e.setAnim(crun.getAnim(exp[1].evalI(c), exp[0].evalB(c), false))
+			if !e.anim.nilAnim && exp[0].evalB(c) { // ffx
+				e.anim.start_scale[0] /= crun.localscl
+				e.anim.start_scale[1] /= crun.localscl
+			}
 		}
 		return true
 	})
@@ -3279,7 +3320,11 @@ func (sc posSet) Run(c *Char, _ []int32) bool {
 		case posSet_y:
 			crun.setY(exp[0].evalF(c)*lclscround + crun.platformPosY)
 		case posSet_z:
-			exp[0].run(c)
+			if crun.size.z.enable {
+				crun.setZ(exp[0].evalF(c) * lclscround)
+			} else {
+				exp[0].run(c)
+			}
 		case posSet_redirectid:
 			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
 				crun = rid
@@ -3305,7 +3350,11 @@ func (sc posAdd) Run(c *Char, _ []int32) bool {
 		case posSet_y:
 			crun.addY(exp[0].evalF(c) * lclscround)
 		case posSet_z:
-			exp[0].run(c)
+			if crun.size.z.enable {
+				crun.addZ(exp[0].evalF(c) * lclscround)
+			} else {
+				exp[0].run(c)
+			}
 		case posSet_redirectid:
 			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
 				crun = rid
@@ -3331,7 +3380,11 @@ func (sc velSet) Run(c *Char, _ []int32) bool {
 		case posSet_y:
 			crun.setYV(exp[0].evalF(c) * lclscround)
 		case posSet_z:
-			exp[0].run(c)
+			if crun.size.z.enable {
+				crun.setZV(exp[0].evalF(c) * lclscround)
+			} else {
+				exp[0].run(c)
+			}
 		case posSet_redirectid:
 			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
 				crun = rid
@@ -3357,7 +3410,11 @@ func (sc velAdd) Run(c *Char, _ []int32) bool {
 		case posSet_y:
 			crun.addYV(exp[0].evalF(c) * lclscround)
 		case posSet_z:
-			exp[0].run(c)
+			if crun.size.z.enable {
+				crun.addZV(exp[0].evalF(c) * lclscround)
+			} else {
+				exp[0].run(c)
+			}
 		case posSet_redirectid:
 			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
 				crun = rid
@@ -3382,7 +3439,11 @@ func (sc velMul) Run(c *Char, _ []int32) bool {
 		case posSet_y:
 			crun.mulYV(exp[0].evalF(c))
 		case posSet_z:
-			exp[0].run(c)
+			if crun.size.z.enable {
+				crun.mulZV(exp[0].evalF(c))
+			} else {
+				exp[0].run(c)
+			}
 		case posSet_redirectid:
 			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
 				crun = rid
@@ -4099,11 +4160,11 @@ const (
 	projectile_pausemovetime
 	projectile_ownpal
 	projectile_remappal
-	projectile_platform
-	projectile_platformwidth
-	projectile_platformheight
-	projectile_platformfence
-	projectile_platformangle
+	// projectile_platform
+	// projectile_platformwidth
+	// projectile_platformheight
+	// projectile_platformfence
+	// projectile_platformangle
 	projectile_redirectid
 )
 
@@ -4228,22 +4289,22 @@ func (sc projectile) Run(c *Char, _ []int32) bool {
 			if len(exp) > 1 {
 				rp[1] = exp[1].evalI(c)
 			}
-		case projectile_platform:
-			p.platform = exp[0].evalB(c)
-		case projectile_platformwidth:
-			p.platformWidth[0] = exp[0].evalF(c) * lclscround
-			if len(exp) > 1 {
-				p.platformWidth[1] = exp[1].evalF(c) * lclscround
-			}
-		case projectile_platformheight:
-			p.platformHeight[0] = exp[0].evalF(c) * lclscround
-			if len(exp) > 1 {
-				p.platformHeight[1] = exp[1].evalF(c) * lclscround
-			}
-		case projectile_platformangle:
-			p.platformAngle = exp[0].evalF(c)
-		case projectile_platformfence:
-			p.platformFence = exp[0].evalB(c)
+		// case projectile_platform:
+		// 	p.platform = exp[0].evalB(c)
+		// case projectile_platformwidth:
+		// 	p.platformWidth[0] = exp[0].evalF(c) * lclscround
+		// 	if len(exp) > 1 {
+		// 		p.platformWidth[1] = exp[1].evalF(c) * lclscround
+		// 	}
+		// case projectile_platformheight:
+		// 	p.platformHeight[0] = exp[0].evalF(c) * lclscround
+		// 	if len(exp) > 1 {
+		// 		p.platformHeight[1] = exp[1].evalF(c) * lclscround
+		// 	}
+		// case projectile_platformangle:
+		// 	p.platformAngle = exp[0].evalF(c)
+		// case projectile_platformfence:
+		// 	p.platformFence = exp[0].evalB(c)
 		default:
 			if !hitDef(sc).runSub(c, &p.hitdef, id, exp) {
 				afterImage(sc).runSub(c, &p.aimg, id, exp)
@@ -5193,7 +5254,7 @@ func (sc superPause) Run(c *Char, _ []int32) bool {
 			}
 			vo := int32(100)
 			crun.playSound(exp[0].evalB(c), false, false, exp[1].evalI(c), n, -1,
-				vo, 0, 1, &crun.pos[0], false)
+				vo, 0, 1, nil, false)
 		case superPause_redirectid:
 			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
 				crun = rid
@@ -5913,8 +5974,8 @@ func (sc sndPan) Run(c *Char, _ []int32) bool {
 		}
 		return true
 	})
-	if ch <= 0 && int(ch) < len(crun.sounds) {
-		crun.sounds[ch].SetPan(pan, x)
+	if ch >= 0 && int(ch) < len(crun.sounds) {
+		crun.sounds[ch].SetPan(pan*crun.facing, crun.localscl, x)
 	}
 	return false
 }
@@ -6271,6 +6332,92 @@ func (sc zoom) Run(c *Char, _ []int32) bool {
 	return false
 }
 
+type forceFeedback StateControllerBase
+
+const (
+	forceFeedback_waveform byte = iota
+	forceFeedback_time
+	forceFeedback_freq
+	forceFeedback_ampl
+	forceFeedback_self
+	forceFeedback_redirectid
+)
+
+func (sc forceFeedback) Run(c *Char, _ []int32) bool {
+	/*crun := c
+	waveform := int32(0)
+	time := int32(60)
+	freq := [4]float32{128, 0, 0, 0}
+	ampl := [4]float32{128, 0, 0, 0}
+	self := true
+	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
+		switch id {
+		case forceFeedback_waveform:
+			waveform = exp[0].evalI(c)
+		case forceFeedback_time:
+			time = exp[0].evalI(c)
+		case forceFeedback_freq:
+			freq[0] = exp[0].evalF(c)
+			if len(exp) > 1 {
+				freq[1] = exp[1].evalF(c)
+			}
+			if len(exp) > 2 {
+				freq[2] = exp[2].evalF(c)
+			}
+			if len(exp) > 3 {
+				freq[3] = exp[3].evalF(c)
+			}
+		case forceFeedback_ampl:
+			ampl[0] = exp[0].evalF(c)
+			if len(exp) > 1 {
+				ampl[1] = exp[1].evalF(c)
+			}
+			if len(exp) > 2 {
+				ampl[2] = exp[2].evalF(c)
+			}
+			if len(exp) > 3 {
+				ampl[3] = exp[3].evalF(c)
+			}
+		case forceFeedback_self:
+			self = exp[0].evalB(c)
+		case forceFeedback_redirectid:
+			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
+				crun = rid
+			} else {
+				return false
+			}
+		}
+		return true
+	})*/
+	//TODO: not implemented
+	return false
+}
+
+type assertInput StateControllerBase
+
+const (
+	assertInput_flag byte = iota
+	assertInput_redirectid
+)
+
+func (sc assertInput) Run(c *Char, _ []int32) bool {
+	crun := c
+	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
+		switch id {
+		case assertInput_flag:
+			crun.inputFlag |= InputBits(exp[0].evalI(c))
+		case assertInput_redirectid:
+			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
+				crun = rid
+			} else {
+				return false
+			}
+		}
+		return true
+	})
+	return false
+}
+
 type dialogue StateControllerBase
 
 const (
@@ -6287,7 +6434,7 @@ func (sc dialogue) Run(c *Char, _ []int32) bool {
 	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
 		switch id {
 		case dialogue_hidebars:
-			sys.dialogueBarsFlg = exp[0].evalB(c)
+			sys.dialogueBarsFlg = sys.lifebar.hidebars && exp[0].evalB(c)
 		case dialogue_force:
 			force = exp[0].evalB(c)
 		case dialogue_text:
@@ -6603,22 +6750,28 @@ func (sc lifebarAction) Run(c *Char, _ []int32) bool {
 	var text string
 	var timemul float32 = 1
 	var time, anim int32 = -1, -1
-	spr := [2]int32{-1, -1}
-	snd := [2]int32{-1, -1}
+	spr := [2]int32{-1, 0}
+	snd := [2]int32{-1, 0}
 	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
 		switch id {
 		case lifebarAction_top:
 			top = exp[0].evalB(c)
 		case lifebarAction_timemul:
-			timemul = float32(exp[0].evalF(c))
+			timemul = exp[0].evalF(c)
 		case lifebarAction_time:
-			time = int32(exp[0].evalI(c))
+			time = exp[0].evalI(c)
 		case lifebarAction_anim:
-			anim = int32(exp[0].evalI(c))
+			anim = exp[0].evalI(c)
 		case lifebarAction_spr:
-			spr = [2]int32{int32(exp[0].evalI(c)), int32(exp[1].evalI(c))}
+			spr[0] = exp[0].evalI(c)
+			if len(exp) > 1 {
+				spr[1] = exp[1].evalI(c)
+			}
 		case lifebarAction_snd:
-			snd = [2]int32{int32(exp[0].evalI(c)), int32(exp[1].evalI(c))}
+			snd[0] = exp[0].evalI(c)
+			if len(exp) > 1 {
+				snd[1] = exp[1].evalI(c)
+			}
 		case lifebarAction_text:
 			text = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
 		case lifebarAction_redirectid:
@@ -6751,69 +6904,33 @@ func (sc matchRestart) Run(c *Char, _ []int32) bool {
 			}
 		case matchRestart_stagedef:
 			s = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
-			if filepath.IsAbs(s) {
-				sys.sel.sdefOverwrite = s
-			} else {
-				sys.sel.sdefOverwrite = filepath.Dir(c.gi().def) + "/" + s
-			}
+			sys.sel.sdefOverwrite = SearchFile(s, []string{c.gi().def})
 			//sys.reloadStageFlg = true
 			reloadFlag = true
 		case matchRestart_p1def:
 			s = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
-			if filepath.IsAbs(s) {
-				sys.sel.cdefOverwrite[0] = s
-			} else {
-				sys.sel.cdefOverwrite[0] = filepath.Dir(c.gi().def) + "/" + s
-			}
+			sys.sel.cdefOverwrite[0] = SearchFile(s, []string{c.gi().def})
 		case matchRestart_p2def:
 			s = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
-			if filepath.IsAbs(s) {
-				sys.sel.cdefOverwrite[1] = s
-			} else {
-				sys.sel.cdefOverwrite[1] = filepath.Dir(c.gi().def) + "/" + s
-			}
+			sys.sel.cdefOverwrite[1] = SearchFile(s, []string{c.gi().def})
 		case matchRestart_p3def:
 			s = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
-			if filepath.IsAbs(s) {
-				sys.sel.cdefOverwrite[2] = s
-			} else {
-				sys.sel.cdefOverwrite[2] = filepath.Dir(c.gi().def) + "/" + s
-			}
+			sys.sel.cdefOverwrite[2] = SearchFile(s, []string{c.gi().def})
 		case matchRestart_p4def:
 			s = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
-			if filepath.IsAbs(s) {
-				sys.sel.cdefOverwrite[3] = s
-			} else {
-				sys.sel.cdefOverwrite[3] = filepath.Dir(c.gi().def) + "/" + s
-			}
+			sys.sel.cdefOverwrite[3] = SearchFile(s, []string{c.gi().def})
 		case matchRestart_p5def:
 			s = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
-			if filepath.IsAbs(s) {
-				sys.sel.cdefOverwrite[4] = s
-			} else {
-				sys.sel.cdefOverwrite[4] = filepath.Dir(c.gi().def) + "/" + s
-			}
+			sys.sel.cdefOverwrite[4] = SearchFile(s, []string{c.gi().def})
 		case matchRestart_p6def:
 			s = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
-			if filepath.IsAbs(s) {
-				sys.sel.cdefOverwrite[5] = s
-			} else {
-				sys.sel.cdefOverwrite[5] = filepath.Dir(c.gi().def) + "/" + s
-			}
+			sys.sel.cdefOverwrite[5] = SearchFile(s, []string{c.gi().def})
 		case matchRestart_p7def:
 			s = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
-			if filepath.IsAbs(s) {
-				sys.sel.cdefOverwrite[6] = s
-			} else {
-				sys.sel.cdefOverwrite[6] = filepath.Dir(c.gi().def) + "/" + s
-			}
+			sys.sel.cdefOverwrite[6] = SearchFile(s, []string{c.gi().def})
 		case matchRestart_p8def:
 			s = string(*(*[]byte)(unsafe.Pointer(&exp[0])))
-			if filepath.IsAbs(s) {
-				sys.sel.cdefOverwrite[7] = s
-			} else {
-				sys.sel.cdefOverwrite[7] = filepath.Dir(c.gi().def) + "/" + s
-			}
+			sys.sel.cdefOverwrite[7] = SearchFile(s, []string{c.gi().def})
 		}
 		return true
 	})
@@ -7002,7 +7119,7 @@ func (sc roundTimeAdd) Run(c *Char, _ []int32) bool {
 	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
 		switch id {
 		case roundTimeAdd_value:
-			sys.gs.time = Min(sys.roundTime, sys.gs.time+exp[0].evalI(c))
+			sys.gs.time = Max(0, Min(sys.roundTime, sys.gs.time+exp[0].evalI(c)))
 		}
 		return true
 	})
@@ -7020,7 +7137,7 @@ func (sc roundTimeSet) Run(c *Char, _ []int32) bool {
 	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
 		switch id {
 		case roundTimeSet_value:
-			sys.gs.time = Min(sys.roundTime, exp[0].evalI(c))
+			sys.gs.time = Max(0, Min(sys.roundTime, exp[0].evalI(c)))
 		}
 		return true
 	})
@@ -7101,6 +7218,101 @@ func (sc scoreAdd) Run(c *Char, _ []int32) bool {
 		}
 		return true
 	})
+	return false
+}
+
+type modifyBGCtrl StateControllerBase
+
+const (
+	modifyBGCtrl_id byte = iota
+	modifyBGCtrl_time
+	modifyBGCtrl_value
+	modifyBGCtrl_x
+	modifyBGCtrl_y
+	modifyBGCtrl_redirectid
+)
+
+func (sc modifyBGCtrl) Run(c *Char, _ []int32) bool {
+	//crun := c
+	var cid int32
+	t, v := [3]int32{IErr, IErr, IErr}, [3]int32{IErr, IErr, IErr}
+	x, y := float32(math.NaN()), float32(math.NaN())
+	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
+		switch id {
+		case modifyBGCtrl_id:
+			cid = exp[0].evalI(c)
+		case modifyBGCtrl_time:
+			t[0] = exp[0].evalI(c)
+			if len(exp) > 1 {
+				t[1] = exp[1].evalI(c)
+				if len(exp) > 2 {
+					t[2] = exp[2].evalI(c)
+				}
+			}
+		case modifyBGCtrl_value:
+			v[0] = exp[0].evalI(c)
+			if len(exp) > 1 {
+				v[1] = exp[1].evalI(c)
+				if len(exp) > 2 {
+					v[2] = exp[2].evalI(c)
+				}
+			}
+		case modifyBGCtrl_x:
+			x = exp[0].evalF(c)
+		case modifyBGCtrl_y:
+			y = exp[0].evalF(c)
+		case modifyBGCtrl_redirectid:
+			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
+				//crun = rid
+			} else {
+				return false
+			}
+		}
+		return true
+	})
+	sys.stage.modifyBGCtrl(cid, t, v, x, y)
+	return false
+}
+
+type playBgm StateControllerBase
+
+const (
+	playBgm_bgm = iota
+	playBgm_volume
+	playBgm_loop
+	playBgm_loopstart
+	playBgm_loopend
+	playBgm_redirectid
+)
+
+func (sc playBgm) Run(c *Char, _ []int32) bool {
+	crun := c
+	var bgm string
+	var loop, volume, loopstart, loopend int = 1, 100, 0, 0
+	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
+		switch id {
+		case playBgm_bgm:
+			if bgm = string(*(*[]byte)(unsafe.Pointer(&exp[0]))); bgm != "" {
+				bgm = SearchFile(bgm, []string{crun.gi().def, "", "sound/"})
+			}
+		case playBgm_volume:
+			volume = int(exp[0].evalI(c))
+		case playBgm_loop:
+			loop = int(exp[0].evalI(c))
+		case playBgm_loopstart:
+			loopstart = int(exp[0].evalI(c))
+		case playBgm_loopend:
+			loopstart = int(exp[0].evalI(c))
+		case playBgm_redirectid:
+			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
+				crun = rid
+			} else {
+				return false
+			}
+		}
+		return true
+	})
+	sys.bgm.Open(bgm, true, loop, volume, loopstart, loopend)
 	return false
 }
 
@@ -7263,6 +7475,131 @@ func (sc targetScoreAdd) Run(c *Char, _ []int32) bool {
 	return false
 }
 
+type text StateControllerBase
+
+const (
+	text_removetime byte = iota
+	text_layerno
+	text_params
+	text_font
+	text_bank
+	text_align
+	text_text
+	text_pos
+	text_scale
+	text_color
+	text_redirectid
+)
+
+func (sc text) Run(c *Char, _ []int32) bool {
+	crun := c
+	params := []interface{}{}
+	var lclscround float32 = 1.0
+	ts := NewTextSprite()
+	var sn int = -1
+	var fflg bool
+	var fnt int = -1
+	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
+		switch id {
+		case text_removetime:
+			ts.removetime = exp[0].evalI(c)
+		case text_layerno:
+			ts.layerno = int16(exp[0].evalI(c))
+		case text_params:
+			for _, e := range exp {
+				if bv := e.run(c); bv.t == VT_Float {
+					params = append(params, bv.ToF())
+				} else {
+					params = append(params, bv.ToI())
+				}
+			}
+		case text_text:
+			sn = int(exp[0].evalI(c))
+		case text_font:
+			fnt = int(exp[1].evalI(c))
+			fflg = exp[0].evalB(c)
+		case text_bank:
+			ts.bank = exp[0].evalI(c)
+		case text_align:
+			ts.align = exp[0].evalI(c)
+		case text_pos:
+			ts.x = exp[0].evalF(c) * lclscround
+			if len(exp) > 1 {
+				ts.y = exp[1].evalF(c) * lclscround
+			}
+		case text_scale:
+			ts.xscl = exp[0].evalF(c)
+			if len(exp) > 1 {
+				ts.yscl = exp[1].evalF(c)
+			}
+		case text_color:
+			var r, g, b int32 = exp[0].evalI(c), 255, 255
+			if len(exp) > 1 {
+				g = exp[1].evalI(c)
+				if len(exp) > 2 {
+					b = exp[2].evalI(c)
+				}
+			}
+			ts.SetColor(r, g, b)
+		case text_redirectid:
+			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
+				crun = rid
+				lclscround = c.localscl / crun.localscl
+			} else {
+				return false
+			}
+		}
+		return true
+	})
+	// text assignment
+	spl := sys.stringPool[sys.workingState.playerNo].List
+	if sn >= 0 && sn < len(spl) {
+		ts.text = OldSprintf(spl[sn], params...)
+	} else {
+		ts.text = OldSprintf("%v", params...)
+	}
+	// font assignment
+	var ok bool
+	if fflg {
+		if fnt >= 0 && fnt < len(sys.lifebar.fnt) && sys.lifebar.fnt[fnt] != nil {
+			ts.fnt = sys.lifebar.fnt[fnt]
+			ok = true
+		}
+	} else if crun.selectNo >= 0 {
+		f := sys.sel.GetChar(crun.selectNo).fnt
+		if fnt >= 0 && fnt < len(f) && f[fnt] != nil {
+			ts.fnt = f[fnt]
+			ok = true
+		}
+	}
+	if !ok {
+		ts.fnt = sys.debugFont.fnt
+	}
+	sys.lifebar.textsprite = append(sys.lifebar.textsprite, ts)
+	return false
+}
+
+// Platform bytecode definitons
+type createPlatform StateControllerBase
+
+const (
+	createPlatform_id byte = iota
+	createPlatform_name
+	createPlatform_anim
+	createPlatform_pos
+	createPlatform_size
+	createPlatform_offset
+	createPlatform_activeTime
+)
+
+type removePlatform StateControllerBase
+
+const (
+	removePlatform_id byte = iota
+	removePlatform_name
+)
+
+// StateDef data struct
 type StateBytecode struct {
 	stateType StateType
 	moveType  MoveType
@@ -7274,9 +7611,15 @@ type StateBytecode struct {
 	numVars   int32
 }
 
+// StateDef bytecode creation function
 func newStateBytecode(pn int) *StateBytecode {
-	sb := &StateBytecode{stateType: ST_S, moveType: MT_I, physics: ST_N,
-		playerNo: pn, block: *newStateBlock()}
+	sb := &StateBytecode{
+		stateType: ST_S,
+		moveType: MT_I,
+		physics: ST_N,
+		playerNo: pn,
+		block: *newStateBlock(),
+	}
 	return sb
 }
 func (sb *StateBytecode) init(c *Char) {

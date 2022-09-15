@@ -480,8 +480,8 @@ func (a *Animation) UpdateSprite() {
 	}
 	a.newframe, a.drawidx = false, a.current
 
-	a.scale_x = a.start_scale[0]
-	a.scale_y = a.start_scale[1]
+	a.scale_x = 1
+	a.scale_y = 1
 	a.angle = 0
 	a.interpolate_offset_x = 0
 	a.interpolate_offset_y = 0
@@ -534,6 +534,8 @@ func (a *Animation) UpdateSprite() {
 			break
 		}
 	}
+	a.scale_x *= a.start_scale[0]
+	a.scale_y *= a.start_scale[1]
 	for _, i := range a.interpolate_angle {
 		if nextDrawidx == i {
 			var drawframe_angle, nextframe_angle float32 = 0, 0
@@ -668,8 +670,8 @@ func (a *Animation) Draw(window *[4]int32, x, y, xcs, ycs, xs, xbs, ys,
 	}
 	xs *= xcs * h
 	ys *= ycs * v
-	x = xcs*x + xs*posLocalscl*(float32(a.frames[a.drawidx].X)+a.interpolate_offset_x)*(1/a.scale_x)
-	y = ycs*y + ys*posLocalscl*(float32(a.frames[a.drawidx].Y)+a.interpolate_offset_y)*(1/a.scale_y)
+	x = xcs*x + xs*posLocalscl*(float32(a.frames[a.drawidx].X)+a.interpolate_offset_x)*a.start_scale[0]*(1/a.scale_x)
+	y = ycs*y + ys*posLocalscl*(float32(a.frames[a.drawidx].Y)+a.interpolate_offset_y)*a.start_scale[1]*(1/a.scale_y)
 	var rcy float32
 	if angle == 0 && yangle == 0 && xangle == 0 {
 		if xs < 0 {
@@ -972,7 +974,8 @@ type Anim struct {
 func NewAnim(sff *Sff, action string) *Anim {
 	lines, i := SplitAndTrim(action, "\n"), 0
 	a := &Anim{anim: ReadAnimation(sff, lines, &i),
-		window: sys.scrrect, xscl: 1, yscl: 1, palfx: newPalFX()}
+		window: sys.scrrect, x: sys.luaSpriteOffsetX,
+		xscl: 1, yscl: 1, palfx: newPalFX()}
 	a.palfx.clear()
 	a.palfx.time = -1
 	if len(a.anim.frames) == 0 {
