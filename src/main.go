@@ -267,6 +267,7 @@ type configSettings struct {
 	VolumeMaster               int
 	VolumeSfx                  int
 	VRetrace                   int
+	WindowCentered             bool
 	WindowIcon                 []string
 	WindowTitle                string
 	XinputTriggerSensitivity   float32
@@ -309,7 +310,6 @@ func setupConfig() configSettings {
 		"data/action.zss",
 		"data/dizzy.zss",
 		"data/guardbreak.zss",
-		"data/rank.zss",
 		"data/score.zss",
 		"data/tag.zss",
 		"data/training.zss"
@@ -319,7 +319,7 @@ func setupConfig() configSettings {
 	"DebugClipboardRows": 2,
 	"DebugClsnDarken": true,
 	"DebugConsoleRows": 15,
-	"DebugFont": "font/default-3x5-bold.def",
+	"DebugFont": "font/debug.def",
 	"DebugFontScale": 1,
 	"DebugKeys": true,
 	"DebugMode": true,
@@ -388,7 +388,7 @@ func setupConfig() configSettings {
 	"RoundsNumTag": 2,
 	"RoundTime": 99,
 	"ScreenshotFolder": "",
-	"StartStage": "stages/stage0-720.def",
+	"StartStage": "stages/stage1.def",
 	"StereoEffects": true,
 	"System": "external/script/main.lua",
 	"Team1VS2Life": 100,
@@ -401,7 +401,8 @@ func setupConfig() configSettings {
 	"VolumeBgm": 80,
 	"VolumeMaster": 80,
 	"VolumeSfx": 80,
-	"VRetrace": 1, 
+	"VRetrace": 1,
+	"WindowCentered": true,
 	"WindowIcon": [
 		"external/icons/IkemenCylia_256.png",
 		"external/icons/IkemenCylia_96.png",
@@ -446,8 +447,8 @@ func setupConfig() configSettings {
 				"t",
 				"y",
 				"RSHIFT",
-				"LEFTBRACKET",
-				"RIGHTBRACKET",
+				"LBRACKET",
+				"RBRACKET",
 				"Not used"
 			]
 		},
@@ -658,7 +659,6 @@ func setupConfig() configSettings {
 	sys.gameWidth = tmp.GameWidth
 	sys.gameHeight = tmp.GameHeight
 	sys.gameSpeed = tmp.GameFramerate / float32(tmp.Framerate)
-
 	sys.helperMax = tmp.MaxHelper
 	sys.lifeMul = tmp.LifeMul / 100
 	sys.lifeShare = [...]bool{tmp.TeamLifeShare, tmp.TeamLifeShare}
@@ -684,6 +684,7 @@ func setupConfig() configSettings {
 	sys.team1VS2Life = tmp.Team1VS2Life / 100
 	sys.vRetrace = tmp.VRetrace
 	sys.wavVolume = tmp.VolumeSfx
+	sys.windowCentered = tmp.WindowCentered
 	sys.windowMainIconLocation = tmp.WindowIcon
 	sys.windowTitle = tmp.WindowTitle
 	sys.xinputTriggerSensitivity = tmp.XinputTriggerSensitivity

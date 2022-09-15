@@ -598,6 +598,9 @@ func (c *Compiler) explodSub(is IniSection,
 	if err := c.paramSpace(is, sc, explod_space); err != nil {
 		return err
 	}
+	if err := c.paramProjection(is, sc, explod_projection); err != nil {
+		return err
+	}
 	f := false
 	if err := c.stateParam(is, "vel", func(data string) error {
 		f = true
@@ -677,6 +680,9 @@ func (c *Compiler) explodSub(is IniSection,
 	if err := c.paramTrans(is, sc, "", explod_trans, false); err != nil {
 		return err
 	}
+	if err := c.palFXSub(is, sc, "palfx."); err != nil {
+		return err
+	}
 	return nil
 }
 func (c *Compiler) explod(is IniSection, sc *StateControllerBase,
@@ -720,6 +726,10 @@ func (c *Compiler) explod(is IniSection, sc *StateControllerBase,
 		}
 		if err := c.paramValue(is, sc, "xangle",
 			explod_xangle, VT_Float, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "focallength",
+			explod_focallength, VT_Float, 1, false); err != nil {
 			return err
 		}
 		if ihp == 0 {
@@ -766,6 +776,10 @@ func (c *Compiler) modifyExplod(is IniSection, sc *StateControllerBase,
 		}
 		if err := c.paramValue(is, sc, "xangle",
 			explod_xangle, VT_Float, 1, false); err != nil {
+			return err
+		}
+		if err := c.paramValue(is, sc, "focallength",
+			explod_focallength, VT_Float, 1, false); err != nil {
 			return err
 		}
 		if ihp == 0 {
@@ -3020,14 +3034,40 @@ func (c *Compiler) attackMulSet(is IniSection, sc *StateControllerBase, _ int8) 
 }
 func (c *Compiler) defenceMulSet(is IniSection, sc *StateControllerBase, _ int8) (StateController, error) {
 	ret, err := (*defenceMulSet)(sc), c.stateSec(is, func() error {
-		if err := c.paramValue(is, sc, "redirectid",
-			defenceMulSet_redirectid, VT_Int, 1, false); err != nil {
+		if err := c.paramValue(
+			is, sc, "redirectid",
+			defenceMulSet_redirectid, VT_Int, 1, false,
+		); err != nil {
 			return err
 		}
-		if err := c.paramValue(is, sc, "value",
-			defenceMulSet_value, VT_Float, 1, true); err != nil {
+		
+		if err := c.paramValue(
+			is, sc, "value",
+			defenceMulSet_value, VT_Float, 1, true,
+		); err != nil {
 			return err
 		}
+		
+		if err := c.stateParam(is, "multype", func(data string) error {
+			var mulType = Atoi(strings.TrimSpace(data))
+
+			if mulType >= 0 && mulType <= 1 {
+				sc.add(defenceMulSet_mulType, sc.iToExp(mulType))
+				return nil
+			} else {
+				return Error(`Invalid "mulType" value.`)
+			}
+		}); err != nil {
+			return err
+		}
+		
+		if err := c.paramValue(
+			is, sc, "onhit",
+			defenceMulSet_onHit, VT_Bool, 1, false,
+		); err != nil {
+			return err
+		}
+		
 		return nil
 	})
 	return *ret, err
@@ -3982,19 +4022,14 @@ func (c *Compiler) playBgm(is IniSection, sc *StateControllerBase, _ int8) (Stat
 			playBgm_redirectid, VT_Int, 1, false); err != nil {
 			return err
 		}
-		b := false
 		if err := c.stateParam(is, "bgm", func(data string) error {
 			if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
 				return Error("Not enclosed in \"")
 			}
 			sc.add(playBgm_bgm, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
-			b = true
 			return nil
 		}); err != nil {
 			return err
-		}
-		if !b {
-			return Error("bgm parameter not specified")
 		}
 		if err := c.paramValue(is, sc, "volume",
 			playBgm_volume, VT_Int, 1, false); err != nil {
@@ -4049,42 +4084,6 @@ func (c *Compiler) modifyBGCtrl(is IniSection, sc *StateControllerBase, _ int8) 
 func (c *Compiler) printToConsole(is IniSection, sc *StateControllerBase, _ int8) (StateController, error) {
 	ret, err := (*printToConsole)(sc), c.stateSec(is, func() error {
 		return c.displayToClipboardSub(is, sc)
-	})
-	return *ret, err
-}
-func (c *Compiler) rankAdd(is IniSection, sc *StateControllerBase, _ int8) (StateController, error) {
-	ret, err := (*rankAdd)(sc), c.stateSec(is, func() error {
-		if err := c.paramValue(is, sc, "redirectid",
-			rankAdd_redirectid, VT_Int, 1, false); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "icon", func(data string) error {
-			if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
-				return Error("Not enclosed in \"")
-			}
-			sc.add(rankAdd_icon, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.stateParam(is, "type", func(data string) error {
-			if len(data) < 2 || data[0] != '"' || data[len(data)-1] != '"' {
-				return Error("Not enclosed in \"")
-			}
-			sc.add(rankAdd_type, sc.beToExp(BytecodeExp(data[1:len(data)-1])))
-			return nil
-		}); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "max",
-			rankAdd_max, VT_Float, 1, true); err != nil {
-			return err
-		}
-		if err := c.paramValue(is, sc, "value",
-			rankAdd_value, VT_Float, 1, true); err != nil {
-			return err
-		}
-		return nil
 	})
 	return *ret, err
 }

@@ -122,6 +122,14 @@ const (
 	Space_screen
 )
 
+type Projection int32
+
+const (
+	Projection_Orthographic Projection = iota
+	Projection_Perspective
+	Projection_Perspective2
+)
+
 type SaveData int32
 
 const (
@@ -161,7 +169,7 @@ func (cr ClsnRect) draw(trans int32) {
 		RenderMugen(*sys.clsnSpr.Tex, sys.clsnSpr.Pal, -1, sys.clsnSpr.Size,
 			-c[0]*sys.widthScale, -c[1]*sys.heightScale, &notiling,
 			c[2]*sys.widthScale, c[2]*sys.widthScale, c[3]*sys.heightScale, 1, 0, 0, 0, 0,
-			trans, &sys.scrrect, 0, 0)
+			trans, &sys.scrrect, 0, 0, 0, 0, 0, 0)
 	}
 }
 
@@ -567,34 +575,63 @@ type HitDef struct {
 }
 
 func (hd *HitDef) clear() {
-	*hd = HitDef{hitflag: int32(ST_S | ST_C | ST_A | ST_F), affectteam: 1,
-		teamside: -1, animtype: RA_Light, air_animtype: RA_Unknown, priority: 4,
-		bothhittype: AT_Hit, sparkno: IErr, guard_sparkno: IErr,
-		hitsound: [...]int32{IErr, 0}, guardsound: [...]int32{IErr, 0},
-		ground_type: HT_High, air_type: HT_Unknown, air_hittime: 20,
-		yaccel: float32(math.NaN()), guard_velocity: float32(math.NaN()),
-		airguard_velocity: [...]float32{float32(math.NaN()),
-			float32(math.NaN())},
+	*hd = HitDef{
+		hitflag:       int32(ST_S | ST_C | ST_A | ST_F),
+		affectteam:    1,
+		teamside:      -1,
+		animtype:      RA_Light,
+		air_animtype:  RA_Unknown,
+		priority:      4,
+		bothhittype:   AT_Hit,
+		sparkno:       IErr,
+		guard_sparkno: IErr,
+		hitsound:      [...]int32{IErr, 0},
+		guardsound:    [...]int32{IErr, 0},
+		ground_type:   HT_High,
+		air_type:      HT_Unknown,
+		// Both default to 20, not documented in Mugen docs.
+		air_hittime:  20,
+		down_hittime: 20,
+
+		yaccel:                     float32(math.NaN()),
+		guard_velocity:             float32(math.NaN()),
+		airguard_velocity:          [...]float32{float32(math.NaN()), float32(math.NaN())},
 		ground_cornerpush_veloff:   float32(math.NaN()),
 		air_cornerpush_veloff:      float32(math.NaN()),
 		down_cornerpush_veloff:     float32(math.NaN()),
 		guard_cornerpush_veloff:    float32(math.NaN()),
-		airguard_cornerpush_veloff: float32(math.NaN()), p1sprpriority: 1,
-		p1stateno: -1, p2stateno: -1, forcestand: IErr,
-		down_velocity: [...]float32{float32(math.NaN()), float32(math.NaN())},
-		chainid:       -1, nochainid: [...]int32{-1, -1}, numhits: 1,
-		hitgetpower: IErr, guardgetpower: IErr, hitgivepower: IErr,
-		guardgivepower: IErr, envshake_freq: 60, envshake_ampl: -4,
+		airguard_cornerpush_veloff: float32(math.NaN()),
+
+		p1sprpriority:  1,
+		p1stateno:      -1,
+		p2stateno:      -1,
+		forcestand:     IErr,
+		down_velocity:  [...]float32{float32(math.NaN()), float32(math.NaN())},
+		chainid:        -1,
+		nochainid:      [...]int32{-1, -1},
+		numhits:        1,
+		hitgetpower:    IErr,
+		guardgetpower:  IErr,
+		hitgivepower:   IErr,
+		guardgivepower: IErr,
+		envshake_freq:  60,
+		envshake_ampl:  -4,
 		envshake_phase: float32(math.NaN()),
 		mindist:        [...]float32{float32(math.NaN()), float32(math.NaN())},
 		maxdist:        [...]float32{float32(math.NaN()), float32(math.NaN())},
 		snap:           [...]float32{float32(math.NaN()), float32(math.NaN())},
-		kill:           true, guard_kill: true, playerNo: -1,
-		dizzypoints: IErr, guardpoints: IErr, redlife: IErr,
-		score: [...]float32{float32(math.NaN()), float32(math.NaN())}}
+		kill:           true,
+		guard_kill:     true,
+		playerNo:       -1,
+		dizzypoints:    IErr,
+		guardpoints:    IErr,
+		redlife:        IErr,
+		score:          [...]float32{float32(math.NaN()), float32(math.NaN())},
+	}
 	hd.palfx.mul, hd.palfx.color = [...]int32{255, 255, 255}, 1
 	hd.fall.setDefault()
 }
+
 func (hd *HitDef) invalidate(stateType StateType) {
 	hd.attr = hd.attr&^int32(ST_MASK) | int32(stateType) | -1<<31
 	hd.reversal_attr |= -1 << 31
@@ -717,6 +754,8 @@ type aimgImage struct {
 	angle          float32
 	yangle         float32
 	xangle         float32
+	projection     int32
+	fLength        float32
 	oldVer         bool
 }
 
@@ -839,6 +878,8 @@ func (ai *AfterImage) recAfterImg(sd *SprData, hitpause bool) {
 		img.angle = sd.angle
 		img.yangle = sd.yangle
 		img.xangle = sd.xangle
+		img.projection = sd.projection
+		img.fLength = sd.fLength
 		img.ascl = sd.ascl
 		img.oldVer = sd.oldVer
 		ai.imgidx = (ai.imgidx + 1) & 63
@@ -864,7 +905,7 @@ func (ai *AfterImage) recAndCue(sd *SprData, rec bool, hitpause bool) {
 			ai.palfx[i/ai.framegap-1].remap = sd.fx.remap
 			sys.sprites.add(&SprData{&img.anim, &ai.palfx[i/ai.framegap-1], img.pos,
 				img.scl, ai.alpha, sd.priority - 2, img.angle, img.yangle, img.xangle, img.ascl,
-				false, sd.bright, sd.oldVer, sd.facing, sd.posLocalscl}, 0, 0, 0, 0)
+				false, sd.bright, sd.oldVer, sd.facing, sd.posLocalscl, img.projection, img.fLength}, 0, 0, 0, 0)
 		}
 	}
 	if rec || hitpause && ai.ignorehitpause {
@@ -903,16 +944,20 @@ type Explod struct {
 	angle          float32
 	yangle         float32
 	xangle         float32
+	projection     Projection
+	fLength        float32
 	oldPos         [2]float32
 	newPos         [2]float32
 	palfx          *PalFX
+	palfxdef       PalFXDef
 	localscl       float32
 }
 
 func (e *Explod) clear() {
 	*e = Explod{id: IErr, scale: [...]float32{1, 1}, removetime: -2,
 		postype: PT_P1, relativef: 1, facing: 1, vfacing: 1, localscl: 1, space: Space_none,
-		alpha: [...]int32{-1, 0}, playerId: -1, bindId: -2, ignorehitpause: true}
+		projection: Projection_Orthographic,
+		alpha:      [...]int32{-1, 0}, playerId: -1, bindId: -2, ignorehitpause: true}
 }
 func (e *Explod) setX(x float32) {
 	e.pos[0], e.oldPos[0], e.newPos[0] = x, x, x
@@ -1092,9 +1137,9 @@ func (e *Explod) update(oldVer bool, playerNo int) {
 		sprs = &sys.bottomSprites
 	}
 	var pfx *PalFX
-	if e.anim.sff != sys.lifebar.fsff {
+	if e.palfx != nil && (e.anim.sff != sys.lifebar.fsff || e.ownpal) {
 		pfx = e.palfx
-	} else if !e.ownpal {
+	} else {
 		pfx = &PalFX{}
 		*pfx = *e.palfx
 		pfx.remap = nil
@@ -1115,13 +1160,19 @@ func (e *Explod) update(oldVer bool, playerNo int) {
 	if sdwalp < 0 {
 		sdwalp = 256
 	}
+
+	fLength := e.fLength
+	if fLength <= 0 {
+		fLength = 2048
+	}
+	fLength = fLength * e.localscl
 	var epos = [2]float32{e.pos[0] * e.localscl, e.pos[1] * e.localscl}
 	sprs.add(&SprData{&e.anim, pfx, epos, [...]float32{e.facing * e.scale[0] * e.localscl,
 		e.vfacing * e.scale[1] * e.localscl}, alp, e.sprpriority, agl, yagl, xagl, [...]float32{1, 1},
-		screen, playerNo == sys.superplayer, oldVer, e.facing, 1},
+		screen, playerNo == sys.superplayer, oldVer, e.facing, 1, int32(e.projection), fLength},
 		e.shadow[0]<<16|e.shadow[1]&0xff<<8|e.shadow[0]&0xff, sdwalp, 0, 0)
 	if sys.tickNextFrame() {
-		if e.bindtime > 0 {
+    if e.bindtime > 0 {
 			e.bindtime--
 		}
 		//if screen && e.bindtime == 0 {
@@ -1142,7 +1193,10 @@ func (e *Explod) update(oldVer bool, playerNo int) {
 		//		}
 		//	}
 		//}
-		if act {
+		if act {		
+			if e.palfx != nil && e.ownpal {
+				e.palfx.step()
+			}
 			if e.bindtime == 0 {
 				e.oldPos = e.pos
 				e.newPos[0] = e.pos[0] + e.velocity[0]*e.facing*float32(e.relativef)
@@ -1418,7 +1472,7 @@ func (p *Projectile) cueDraw(oldVer bool, playerNo int) {
 		sd := &SprData{p.ani, p.palfx, [...]float32{p.pos[0] * p.localscl, p.pos[1] * p.localscl},
 			[...]float32{p.facing * p.scale[0] * p.localscl, p.scale[1] * p.localscl}, [2]int32{-1},
 			p.sprpriority, p.facing * p.angle, 0, 0, [...]float32{1, 1}, false, playerNo == sys.superplayer,
-			sys.cgi[playerNo].ver[0] != 1, p.facing, 1}
+			sys.cgi[playerNo].ver[0] != 1, p.facing, 1, 0, 0}
 		p.aimg.recAndCue(sd, sys.tickNextFrame() && notpause, false)
 		sys.sprites.add(sd,
 			p.shadow[0]<<16|p.shadow[1]&255<<8|p.shadow[2]&255, 256, 0, 0)
@@ -1471,6 +1525,7 @@ type CharGlobalInfo struct {
 	remapPreset      map[string]RemapPreset
 	remappedpal      [2]int32
 	localcoord       [2]float32
+	ikemenver        [3]uint16
 }
 
 func (cgi *CharGlobalInfo) clearPCTime() {
@@ -1552,6 +1607,7 @@ type CharSystemVar struct {
 	fallDefenseMul  float32
 	customDefense   float32
 	finalDefense    float64
+	defenseMulDelay bool
 
 	counterHit   bool
 	firstAttack  bool
@@ -1644,7 +1700,7 @@ type Char struct {
 	dialogue              []string
 	immortal              bool
 	kovelocity            bool
-	preserve              bool
+	preserve              int32
 	defaultHitScale       [3]*HitScale
 	nextHitScale          map[int32][3]*HitScale
 	activeHitScale        map[int32][3]*HitScale
@@ -1719,6 +1775,7 @@ func (c *Char) clear1() {
 	c.superDefenseMul = 1
 	c.fallDefenseMul = 1
 	c.customDefense = 1
+	c.defenseMulDelay = false
 	c.key = -1
 	c.id = -1
 	c.helperId = 0
@@ -1737,6 +1794,10 @@ func (c *Char) clear1() {
 	c.pushed = false
 	c.atktmp, c.hittmp, c.acttmp, c.minus = 0, 0, 0, 2
 	c.winquote = -1
+	c.inheritJuggle = 0
+	c.immortal = false
+	c.kovelocity = false
+	c.preserve = 0
 }
 func (c *Char) copyParent(p *Char) {
 	c.parentIndex = p.helperIndex
@@ -1797,11 +1858,10 @@ func (c *Char) clearCachedData() {
 	c.mctype, c.mctime = MC_Hit, 0
 	c.counterHit = false
 	c.fallTime = 0
-	c.varRangeSet(0, int32(NumVar)-1, 0)
-	c.fvarRangeSet(0, int32(NumFvar)-1, 0)
 	c.superDefenseMul = 1
 	c.fallDefenseMul = 1
 	c.customDefense = 1
+	c.defenseMulDelay = false
 	c.ownpal = true
 	c.animPN = -1
 	c.animNo = 0
@@ -2484,10 +2544,12 @@ func (c *Char) target(id int32) *Char {
 	}
 	return nil
 }
-func (c *Char) partner(n int32) *Char {
+func (c *Char) partner(n int32, log bool) *Char {
 	n = Max(0, n)
 	if int(n) > len(sys.gs.chars)/2-2 {
-		sys.appendToConsole(c.warn() + fmt.Sprintf("has no partner: %v", n))
+		if log {
+			sys.appendToConsole(c.warn() + fmt.Sprintf("has no partner: %v", n))
+		}
 		return nil
 	}
 	// X>>1 = X/2
@@ -2505,7 +2567,9 @@ func (c *Char) partner(n int32) *Char {
 	if len(sys.gs.chars[p]) > 0 && sys.getChar(p, 0).teamside != -1 {
 		return sys.getChar(p, 0)
 	}
-	sys.appendToConsole(c.warn() + fmt.Sprintf("has no partner: %v", n))
+	if log {
+		sys.appendToConsole(c.warn() + fmt.Sprintf("has no partner: %v", n))
+	}
 	return nil
 }
 func (c *Char) partnerV2(n int32) *Char {
@@ -2924,7 +2988,7 @@ func (c *Char) roundState() int32 {
 	case sys.intro >= 0 || sys.finish == FT_NotYet:
 		return 2
 	case sys.intro < -(sys.lifebar.ro.over_hittime+
-		sys.lifebar.ro.over_waittime) && sys.fightOver:
+		sys.lifebar.ro.over_waittime):
 		return 4
 	default:
 		return 3
@@ -3243,6 +3307,7 @@ func (c *Char) destroySelf(recursive, removeexplods bool) bool {
 	return true
 }
 func (c *Char) newHelper() (h *Char) {
+	// If any existing helper entries are valid for overwriting, use that one
 	i := int32(0)
 	for ; int(i) < len(sys.gs.chars[c.playerNo]); i++ {
 		if sys.getChar(c.playerNo, int(i)).helperIndex < 0 {
@@ -3251,6 +3316,7 @@ func (c *Char) newHelper() (h *Char) {
 			break
 		}
 	}
+	// Otherwise appends to the end
 	if int(i) >= len(sys.gs.chars[c.playerNo]) {
 		if i >= sys.helperMax {
 			return
@@ -3343,7 +3409,12 @@ func (c *Char) helperInit(h *Char, st int32, pt PosType, x, y float32,
 func (c *Char) newExplod() (*Explod, int) {
 	explinit := func(expl *Explod) *Explod {
 		expl.clear()
-		expl.id, expl.playerId, expl.palfx = -1, c.id, c.getPalfx()
+		expl.id, expl.playerId, expl.palfx, expl.palfxdef = -1, c.id, c.getPalfx(), PalFXDef{color: 1, mul: [...]int32{256, 256, 256}}
+		if c.stCgi().ver[0] == 1 && c.stCgi().ver[1] == 1 && c.stCgi().ikemenver[0] == 0 && c.stCgi().ikemenver[1] == 0 {
+			expl.projection = Projection_Perspective
+		} else {
+			expl.projection = Projection_Orthographic
+		}
 		return expl
 	}
 	for i := range sys.gs.explods[c.playerNo] {
@@ -3373,12 +3444,19 @@ func (c *Char) insertExplodEx(i int, rp [2]int32) {
 		return
 	}
 	e.anim.UpdateSprite()
-	if e.ownpal && e.anim.sff != sys.lifebar.fsff {
-		remap := make([]int, len(e.palfx.remap))
-		copy(remap, e.palfx.remap)
-		e.palfx = newPalFX()
-		e.palfx.remap = remap
-		c.forceRemapPal(e.palfx, rp)
+	if e.ownpal {
+		if e.anim.sff != sys.lifebar.fsff {
+			remap := make([]int, len(e.palfx.remap))
+			copy(remap, e.palfx.remap)
+			e.palfx = newPalFX()
+			e.palfx.remap = remap
+			e.palfx.PalFXDef = e.palfxdef
+			c.forceRemapPal(e.palfx, rp)
+		} else {
+			e.palfx = newPalFX()
+			e.palfx.PalFXDef = e.palfxdef
+			e.palfx.remap = nil
+		}
 	}
 	if e.ontop {
 		td := &sys.gs.topexplDrawlist[c.playerNo]
@@ -3516,13 +3594,15 @@ func (c *Char) posReset() {
 	if c.teamside == -1 {
 		c.facing = 1
 		c.setX(0)
+		c.setY(0)
+		c.setZ(0)
 	} else {
 		c.facing = 1 - 2*float32(c.playerNo&1)
 		c.setX((float32(sys.stage.p[c.playerNo&1].startx-sys.gs.cam.startx)*
 			sys.stage.localscl - c.facing*float32(c.playerNo>>1)*sys.stage.p1p3dist) / c.localscl)
+		c.setY(float32(sys.stage.p[c.playerNo&1].starty) * sys.stage.localscl / c.localscl)
+		c.setZ(float32(sys.stage.p[c.playerNo&1].startz))
 	}
-	c.setY(0)
-	c.setZ(0)
 	c.setXV(0)
 	c.setYV(0)
 	c.setZV(0)
@@ -4224,38 +4304,6 @@ func (c *Char) guardPointsSet(set int32) {
 		c.guardPoints = Max(0, Min(c.guardPointsMax, set))
 	}
 }
-func (c *Char) rank() float32 {
-	if c.teamside == -1 {
-		return 0
-	}
-	var r float32
-	for _, v := range sys.lifebar.sc[c.teamside].rankPoints {
-		r += v
-	}
-	return r
-}
-func (c *Char) rankAdd(val, max float32, typ, ico string) {
-	if c.teamside == -1 {
-		return
-	}
-	if _, ok := sys.lifebar.sc[c.teamside].rankPoints[typ]; !ok {
-		sys.lifebar.sc[c.teamside].rankPoints[typ] = 0
-	}
-	if max == 0 {
-		sys.lifebar.sc[c.teamside].rankPoints[typ] += val
-	} else {
-		sys.lifebar.sc[c.teamside].rankPoints[typ] = MinF(sys.lifebar.sc[c.teamside].rankPoints[typ]+val, max)
-	}
-	if ico != "" {
-		var unique map[string]bool = make(map[string]bool)
-		for _, v := range sys.lifebar.sc[c.teamside].rankIcons {
-			unique[v] = true
-		}
-		if _, ok := unique[ico]; !ok {
-			sys.lifebar.sc[c.teamside].rankIcons = append(sys.lifebar.sc[c.teamside].rankIcons, ico)
-		}
-	}
-}
 func (c *Char) redLifeAdd(add float64, absolute bool) {
 	if add != 0 && c.roundState() != 3 {
 		if !absolute {
@@ -4645,13 +4693,13 @@ func (c *Char) scaleHit(baseDamage, id int32, index int) int32 {
 	var hs *HitScale
 	var ahs *HitScale
 	var heal = false
-	var retDamage = baseDamage
 
 	// Check if we are healing.
 	if baseDamage < 0 {
 		baseDamage *= -1
 		heal = true
 	}
+	var retDamage = baseDamage
 
 	// Get the values we want to scale.
 	if t, ok := c.nextHitScale[id]; ok && t[index].active {
@@ -4830,6 +4878,10 @@ func (c *Char) gravity() {
 
 // Updates pos based on multiple factors
 func (c *Char) posUpdate() {
+	var velOff float32
+	if sys.super == 0 {
+		velOff = c.velOff
+	}
 	nobind := [...]bool{c.bindTime == 0 || math.IsNaN(float64(c.bindPos[0])),
 		c.bindTime == 0 || math.IsNaN(float64(c.bindPos[1]))}
 	for i := range nobind {
@@ -4839,12 +4891,12 @@ func (c *Char) posUpdate() {
 	}
 	if c.sf(CSF_posfreeze) {
 		if nobind[0] {
-			c.setPosX(c.oldPos[0] + c.velOff)
+			c.setPosX(c.oldPos[0] + velOff)
 		}
 	} else {
 		// Controls speed
 		if nobind[0] {
-			c.setPosX(c.oldPos[0] + c.vel[0]*c.facing + c.velOff)
+			c.setPosX(c.oldPos[0] + c.vel[0]*c.facing + velOff)
 		}
 		if nobind[1] {
 			c.setPosY(c.oldPos[1] + c.vel[1])
@@ -4863,9 +4915,11 @@ func (c *Char) posUpdate() {
 			c.gravity()
 		}
 	}
-	c.velOff *= 0.7
-	if AbsF(c.velOff) < 1 {
-		c.velOff = 0
+	if sys.super == 0 {
+		c.velOff *= 0.7
+		if AbsF(c.velOff) < 1 {
+			c.velOff = 0
+		}
 	}
 }
 func (c *Char) addTarget(id int32) {
@@ -5171,9 +5225,6 @@ func (c *Char) action() {
 		c.setSCF(SCF_guard)
 	}
 	if !p {
-		if c.palfx != nil {
-			c.palfx.step()
-		}
 		if c.keyctrl[0] && c.cmd != nil {
 			if c.ss.stateType == ST_A {
 				if c.cmd[0].Buffer.U < 0 {
@@ -5336,6 +5387,9 @@ func (c *Char) action() {
 			c.p1facing = 0
 			c.setCurrentFrameFromAnim()
 		}
+		if c.palfx != nil {
+			c.palfx.step()
+		}
 		if c.ghv.damage != 0 {
 			if c.ss.moveType == MT_H {
 				c.lifeAdd(-float64(c.ghv.damage), true, true)
@@ -5347,7 +5401,7 @@ func (c *Char) action() {
 		c.ghv.hitpower = 0
 		c.ghv.guardpower = 0
 		if c.ghv.redlife != 0 {
-			if c.ss.moveType == MT_H && !c.scf(SCF_guard) {
+			if c.ss.moveType == MT_H && !c.inGuardState() {
 				c.redLifeAdd(float64(c.ghv.redlife), true)
 			}
 			c.ghv.redlife = 0
@@ -5507,7 +5561,11 @@ func (c *Char) update(cvmin, cvmax,
 		}
 		hitScaletimeAdvance(c.defaultHitScale)
 	}
-	c.finalDefense = float64(((float32(c.gi().data.defence) * c.customDefense * c.superDefenseMul * c.fallDefenseMul) / 100))
+	var customDefense float32 = 1
+	if !c.defenseMulDelay || c.ss.moveType == MT_H {
+		customDefense = c.customDefense
+	}
+	c.finalDefense = float64(((float32(c.gi().data.defence) * customDefense * c.superDefenseMul * c.fallDefenseMul) / 100))
 	if sys.tickNextFrame() {
 		c.pushed = false
 	}
@@ -5742,7 +5800,7 @@ func (c *Char) cueDraw() {
 		sdf := func() *SprData {
 			sd := &SprData{&c.anim, c.getPalfx(), pos,
 				scl, c.alpha, c.sprPriority, agl, 0, 0, c.angleScalse, false,
-				c.playerNo == sys.superplayer, c.gi().ver[0] != 1, c.facing, c.localscl / (320 / float32(c.localcoord))}
+				c.playerNo == sys.superplayer, c.gi().ver[0] != 1, c.facing, c.localscl / (320 / float32(c.localcoord)), 0, 0}
 			if !c.sf(CSF_trans) {
 				sd.alpha[0] = -1
 			}
@@ -5811,6 +5869,30 @@ func (cl *CharList) add(c *Char) {
 	}
 
 	cl.idMap[c.id] = c.stateIdx
+}
+func (cl *CharList) replace(dc *Char, pn int, idx int32) bool {
+	var ok bool
+	// Replace run order
+	for i, cidx := range cl.runOrder {
+		c := &sys.gs.charArray[cidx]
+		if c.playerNo == pn && c.helperIndex == idx {
+			cl.runOrder[i] = dc.stateIdx
+			ok = true
+			break
+		}
+	}
+	if ok {
+		// Replace draw order
+		for i, cidx := range cl.drawOrder {
+			c := &sys.gs.charArray[cidx]
+			if c.playerNo == pn && c.helperIndex == idx {
+				cl.drawOrder[i] = dc.stateIdx
+				break
+			}
+		}
+		cl.idMap[dc.id] = dc.stateIdx
+	}
+	return ok
 }
 func (cl *CharList) delete(dc *Char) {
 	for i, cidx := range cl.runOrder {
@@ -6878,19 +6960,19 @@ func (cl *CharList) enemyNear(c *Char, n int32, p2, log bool) *Char {
 }
 
 type Platform struct {
-	name       string
-	id         int32
-	
-	pos        [2]float32
-	size       [2]int32
-	offset     [2]int32
-	
-	anim       int32
-	activeTime int32
-	isSolid    bool
-	borderFall bool
+	name string
+	id   int32
+
+	pos    [2]float32
+	size   [2]int32
+	offset [2]int32
+
+	anim        int32
+	activeTime  int32
+	isSolid     bool
+	borderFall  bool
 	destroySelf bool
 
-	localScale   float32
-	ownerID int32
+	localScale float32
+	ownerID    int32
 }

@@ -152,7 +152,6 @@ func newCompiler() *Compiler {
 		"modifybgctrl":         c.modifyBGCtrl,
 		"playbgm":              c.playBgm,
 		"printtoconsole":       c.printToConsole,
-		"rankadd":              c.rankAdd,
 		"redlifeadd":           c.redLifeAdd,
 		"redlifeset":           c.redLifeSet,
 		"remapsprite":          c.remapSprite,
@@ -342,7 +341,6 @@ var triggerMap = map[string]int{
 	"pausetime":        1,
 	"physics":          1,
 	"playerno":         1,
-	"rank":             1,
 	"ratiolevel":       1,
 	"receivedhits":     1,
 	"receiveddamage":   1,
@@ -2599,8 +2597,6 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 		}
 	case "playerno":
 		out.append(OC_ex_, OC_ex_playerno)
-	case "rank":
-		out.append(OC_ex_, OC_ex_rank)
 	case "ratiolevel":
 		out.append(OC_ex_, OC_ex_ratiolevel)
 	case "receiveddamage":
@@ -3420,6 +3416,30 @@ func (c *Compiler) paramSpace(is IniSection, sc *StateControllerBase,
 	})
 }
 
+func (c *Compiler) paramProjection(is IniSection, sc *StateControllerBase,
+	id byte) error {
+	return c.stateParam(is, "projection", func(data string) error {
+		if len(data) <= 1 {
+			return Error("Value not specified")
+		}
+		var proj Projection
+		if len(data) >= 2 {
+			if strings.ToLower(data[:2]) == "or" {
+				proj = Projection_Orthographic
+			} else if strings.ToLower(data[:2]) == "pe" {
+				if data[len(data)-1] != '2' {
+					proj = Projection_Perspective
+				} else {
+					proj = Projection_Perspective2
+				}
+
+			}
+		}
+		sc.add(id, sc.iToExp(int32(proj)))
+		return nil
+	})
+}
+
 func (c *Compiler) paramSaveData(is IniSection, sc *StateControllerBase,
 	id byte) error {
 	return c.stateParam(is, "savedata", func(data string) error {
@@ -3490,9 +3510,12 @@ func (c *Compiler) paramTrans(is IniSection, sc *StateControllerBase,
 				if err != nil {
 					return err
 				}
-				if tt == TT_add1 {
-					exp = make([]BytecodeExp, 4) // 長さ4にする
-				} else if tt == TT_add || tt == TT_alpha {
+				// TODO: Based on my tests add1 doesn't need special alpha[1] handling
+				// Remove unused code if there won't be regression.
+				//if tt == TT_add1 {
+				//	exp = make([]BytecodeExp, 4) // 長さ4にする
+				//} else if tt == TT_add || tt == TT_alpha {
+				if tt == TT_add || tt == TT_alpha || tt == TT_add1 {
 					exp = make([]BytecodeExp, 3) // 長さ3にする
 				} else {
 					exp = make([]BytecodeExp, 2)
@@ -3750,7 +3773,7 @@ func cnsStringArray(arg string) ([]string, error) {
 
 // Compile a state file
 func (c *Compiler) stateCompile(states map[int32]StateBytecode,
-	filename, def string) error {
+	filename, def string, negoverride bool) error {
 	var str string
 	zss := HasExtension(filename, ".zss")
 	fnz := filename
@@ -4058,7 +4081,8 @@ func (c *Compiler) stateCompile(states map[int32]StateBytecode,
 			}
 		}
 
-		if _, ok := states[c.stateNo]; !ok || c.stateNo < 0 {
+		// Skip appending if already declared. Exception for negative states present in CommonStates and files belonging to char flagged with ikemenversion
+		if _, ok := states[c.stateNo]; !ok || (!negoverride && c.stateNo < 0) {
 			states[c.stateNo] = *sbc
 		}
 	}
@@ -4795,18 +4819,32 @@ func (c *Compiler) Compile(pn int, def string) (map[int32]StateBytecode,
 		is, name, _ := ReadIniSection(lines, &i)
 		switch name {
 		case "info":
-			// Read info section for the mugen version of the character
+			// Read info section for the mugen/ikemen version of the character
 			if info {
 				info = false
+				var ok bool
+				var str string
 				sys.cgi[pn].ver = [2]uint16{}
-				str, ok := is["mugenversion"]
-				if ok {
+				if str, ok = is["mugenversion"]; ok {
 					for i, s := range SplitAndTrim(str, ".") {
 						if i >= len(sys.cgi[pn].ver) {
 							break
 						}
 						if v, err := strconv.ParseUint(s, 10, 16); err == nil {
 							sys.cgi[pn].ver[i] = uint16(v)
+						} else {
+							break
+						}
+					}
+				}
+				sys.cgi[pn].ikemenver = [3]uint16{}
+				if str, ok = is["ikemenversion"]; ok {
+					for i, s := range SplitAndTrim(str, ".") {
+						if i >= len(sys.cgi[pn].ikemenver) {
+							break
+						}
+						if v, err := strconv.ParseUint(s, 10, 16); err == nil {
+							sys.cgi[pn].ikemenver[i] = uint16(v)
 						} else {
 							break
 						}
@@ -4940,24 +4978,27 @@ func (c *Compiler) Compile(pn int, def string) (map[int32]StateBytecode,
 	// Compile state files
 	for _, s := range st {
 		if len(s) > 0 {
-			if err := c.stateCompile(states, s, def); err != nil {
+			if err := c.stateCompile(states, s, def, sys.cgi[pn].ikemenver[0] == 0 &&
+				sys.cgi[pn].ikemenver[1] == 0); err != nil {
 				return nil, err
 			}
 		}
 	}
 	// Compile states in command file
-	if err := c.stateCompile(states, cmd, def); err != nil {
+	if err := c.stateCompile(states, cmd, def, sys.cgi[pn].ikemenver[0] == 0 &&
+		sys.cgi[pn].ikemenver[1] == 0); err != nil {
 		return nil, err
 	}
 	// Compile states in common state file
 	if len(stcommon) > 0 {
-		if err := c.stateCompile(states, stcommon, def); err != nil {
+		if err := c.stateCompile(states, stcommon, def, sys.cgi[pn].ikemenver[0] == 0 &&
+			sys.cgi[pn].ikemenver[1] == 0); err != nil {
 			return nil, err
 		}
 	}
 	// Compile common states from config
 	for _, s := range sys.commonStates {
-		if err := c.stateCompile(states, s, def); err != nil {
+		if err := c.stateCompile(states, s, def, false); err != nil {
 			return nil, err
 		}
 	}

@@ -30,6 +30,7 @@ type Fnt struct {
 	colors    int32
 	offset    [2]int32
 	ttf       *glfont.Font
+	paltex    *Texture
 }
 
 func newFnt() *Fnt {
@@ -458,9 +459,14 @@ func (f *Fnt) getCharSpr(c rune, bank, bt int32) *Sprite {
 	return &fci.img[0]
 }
 
-func (f *Fnt) drawChar(x, y, xscl, yscl float32, bank, bt int32,
-	c rune, pal []uint32, window *[4]int32, palfx *PalFX) float32 {
-
+func (f *Fnt) drawChar(
+	x, y,
+	xscl, yscl float32,
+	bank, bt int32,
+	c rune, pal []uint32, 
+	window *[4]int32,
+	palfx *PalFX,
+) float32 {
 	if c == ' ' {
 		return float32(f.Size[0]) * xscl
 	}
@@ -480,27 +486,37 @@ func (f *Fnt) drawChar(x, y, xscl, yscl float32, bank, bt int32,
 
 	x -= xscl * float32(spr.Offset[0])
 	y -= yscl * float32(spr.Offset[1])
-	spr.glDraw(pal, 0, -x*sys.widthScale,
-		-y*sys.heightScale, &notiling, xscl*sys.widthScale, xscl*sys.widthScale,
-		yscl*sys.heightScale, 0, 0, 0, 0,
-		sys.brightness*255>>8|1<<9, window, 0, 0, nil, nil)
+
+	spr.glDraw(pal, 0,
+		-x*sys.widthScale, -y*sys.heightScale, &notiling,
+		xscl*sys.widthScale, xscl*sys.widthScale,
+		yscl*sys.heightScale, 0,
+		0, 0, 0,
+		sys.brightness*255>>8|1<<9,
+		window, 0, 0,
+		nil, f.paltex,
+		0, 0, -xscl * float32(spr.Offset[0]), -yscl*float32(spr.Offset[1]),
+	)
+	if f.paltex == nil {
+		f.paltex = spr.PalTex
+	}
 	return float32(spr.Size[0]) * xscl
 }
 
 func (f *Fnt) Print(txt string, x, y, xscl, yscl float32, bank, align int32,
-	window *[4]int32, palfx *PalFX, frgba [4]float32, round bool) {
+	window *[4]int32, palfx *PalFX, frgba [4]float32) {
 	if !sys.frameSkip {
 		if f.Type == "truetype" {
 			f.DrawTtf(txt, x, y, xscl, yscl, align, true, window, frgba)
 		} else {
-			f.DrawText(txt, x, y, xscl, yscl, bank, align, window, palfx, round)
+			f.DrawText(txt, x, y, xscl, yscl, bank, align, window, palfx)
 		}
 	}
 }
 
 //DrawText prints on screen a specified text with the current font sprites
 func (f *Fnt) DrawText(txt string, x, y, xscl, yscl float32, bank, align int32,
-	window *[4]int32, palfx *PalFX, round bool) {
+	window *[4]int32, palfx *PalFX) {
 
 	if len(txt) == 0 {
 		return
@@ -527,12 +543,6 @@ func (f *Fnt) DrawText(txt string, x, y, xscl, yscl float32, bank, align int32,
 
 	if align == 0 {
 		x -= float32(f.TextWidth(txt, bank)) * xscl * 0.5
-		// Aligned strings may end up being rendered with scaling artefacts due to floating point.
-		// Rounding text images offset fixes this problem (should be used only on static text,
-		// not on moving elements like combo text, due to extra precision needed in that case)
-		if round {
-			x = float32(math.Round(float64(x)))
-		}
 	} else if align < 0 {
 		x -= float32(f.TextWidth(txt, bank)) * xscl
 	}
@@ -542,6 +552,7 @@ func (f *Fnt) DrawText(txt string, x, y, xscl, yscl float32, bank, align int32,
 		pal = palfx.getFxPal(f.palettes[bank][:], false)
 	}
 
+	f.paltex = nil
 	for _, c := range txt {
 		x += f.drawChar(x, y, xscl, yscl, bank, bt, c, pal, window, palfx) + xscl*float32(f.Spacing[0])
 	}
@@ -572,8 +583,8 @@ type TextSprite struct {
 	window           [4]int32
 	palfx            *PalFX
 	frgba            [4]float32 //ttf fonts
-	removetime       int32 //text sctrl
-	layerno          int16 //text sctrl
+	removetime       int32      //text sctrl
+	layerno          int16      //text sctrl
 }
 
 func NewTextSprite() *TextSprite {
@@ -608,7 +619,7 @@ func (ts *TextSprite) Draw() {
 		if ts.fnt.Type == "truetype" {
 			ts.fnt.DrawTtf(ts.text, ts.x, ts.y, ts.xscl, ts.yscl, ts.align, true, &ts.window, ts.frgba)
 		} else {
-			ts.fnt.DrawText(ts.text, ts.x, ts.y, ts.xscl, ts.yscl, ts.bank, ts.align, &ts.window, ts.palfx, true)
+			ts.fnt.DrawText(ts.text, ts.x, ts.y, ts.xscl, ts.yscl, ts.bank, ts.align, &ts.window, ts.palfx)
 		}
 	}
 }

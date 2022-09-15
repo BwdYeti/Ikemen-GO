@@ -4,7 +4,6 @@
 Default.Enable.Action = 1
 Default.Enable.Dizzy = 1
 Default.Enable.GuardBreak = 1
-Default.Enable.Rank = 1
 Default.Enable.Score = 1
 Default.Enable.Tag = 1
 
@@ -25,6 +24,7 @@ TagCommandAIChance = 50        ; affects default AI switching probability (range
 TagCounterSwitchPower = 1000   ; counter switch power cost (used in MvCI ver only)
 TagRedLifeRegenFrames = 30     ; red life regeneration interval (in frames)
 TagRedLifeRegenPercent = 0.005 ; red life regenerated each interval (percentage of max life)
+TagSwitchCooldown = 0          ; number of ticks the tag switch cooldown lasts
 
 ; Character Reserved Action Numbers
 AnimStanding = 0
