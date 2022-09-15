@@ -2934,7 +2934,9 @@ func (l *Loader) loadChar(pn int) int {
 		if sys.com[pn] != 0 {
 			p.key ^= -1
 		}
-		p.clearCachedData()
+		if sys.roundsExisted[pn&1] == 0 {
+			p.clearCachedData()
+		}
 
 		sys.gs.appendChar(p)
 	} else {

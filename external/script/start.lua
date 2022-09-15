@@ -13,6 +13,7 @@ start.challenger = 0
 local restoreCursor = false
 local selScreenEnd = false
 local stageEnd = false
+local stageRandom = false
 local stageListNo = 0
 local t_aiRamp = {}
 local t_gameStats = {}
@@ -517,6 +518,7 @@ function start.f_setStage(num, assigned)
 		if stageListNo == 0 then
 			num = main.t_selectableStages[math.random(1, #main.t_selectableStages)]
 			stageListNo = num -- comment out to randomize stage after each fight in survival mode, when random stage is chosen
+			stageRandom = true
 		else
 			num = main.t_selectableStages[stageListNo]
 		end
@@ -734,6 +736,7 @@ function start.f_resetTempData(t, subname)
 		for member, v in ipairs(start.p[side].t_selTemp) do
 			v.anim = t['p' .. side .. '_member' .. member .. subname .. '_anim'] or t['p' .. side .. subname .. '_anim']
 			v.anim_data = start.f_animGet(v.ref, side, member, t, subname, '', true)
+			v.face2_data = start.f_animGet(v.ref, side, member, t, '_face2', '', true)
 			v.slide_dist = {0, 0}
 		end
 		start.p[side].screenDelay = 0
@@ -800,69 +803,74 @@ local function f_slideDistCalc(slide_dist, t_dist, t_speed)
 end
 
 --calculate portraits x pos
-local function f_portraitsXCalc(side, t, subname, i, member)
+local function f_portraitsXCalc(side, t, subname, member)
 	local x = t['p' .. side .. subname .. '_pos'][1] + t['p' .. side .. subname .. '_offset'][1] + (main.f_tableExists(t['p' .. side .. '_member' .. member .. subname .. '_offset'])[1] or 0)
 	if t['p' .. side .. subname .. '_padding'] == 1 then
-		return x + (2 * i - 1) * t['p' .. side .. subname .. '_spacing'][1] * t['p' .. side .. subname .. '_num'] / (2 * math.min(t['p' .. side .. subname .. '_num'], math.max(start.p[side].numChars, #start.p[side].t_selected)))
+		return x + (2 * member - 1) * t['p' .. side .. subname .. '_spacing'][1] * t['p' .. side .. subname .. '_num'] / (2 * math.min(t['p' .. side .. subname .. '_num'], math.max(start.p[side].numChars, #start.p[side].t_selected)))
 	end
-	return x + (i - 1) * t['p' .. side .. subname .. '_spacing'][1]
+	return x + (member - 1) * t['p' .. side .. subname .. '_spacing'][1]
 end
 
 --draw portraits
-function start.f_drawPortraits(t_sel, side, t, subname, last, reversed, icon)
-	if #t_sel == 0 then
+function start.f_drawPortraits(t_portraits, side, t, subname, last, icon)
+	if #t_portraits == 0 then
 		return
 	end
-	local t_portraits = {}
-	--not select screen or team side in coop mode
-	if not last or ((side == 1 and main.coop) or gamemode('versuscoop')) then
-		t_portraits = t_sel
-	--otherwise insert most recently selected chars ascending up to pX.face.num
-	else
-		for i = #t_sel, #t_sel - t['p' .. side .. subname .. '_num'] + 1, -1 do
-			table.insert(t_portraits, t_sel[i])
-		end
+	-- draw background portrait
+	local member = 1
+	if last then
+		member = #t_portraits
 	end
-	--adjust order of rendering
-	local loopStart, loopEnd, loopStep = #t_portraits, 1, -1
-	if reversed then
-		loopStart, loopEnd, loopStep = 1, #t_portraits, 1
-		t_portraits = main.f_tableReverse(t_portraits)
+	if t_portraits[member].face2_data ~= nil then
+		main.f_animPosDraw(
+			t_portraits[member].face2_data,
+			t['p' .. side .. subname .. '_pos'][1] + t['p' .. side .. '_face2_offset'][1],
+			t['p' .. side .. subname .. '_pos'][2] + t['p' .. side .. '_face2_offset'][2],
+			t['p' .. side .. '_face2_facing'],
+			true
+		)
 	end
-	--draw portraits
-	for i = loopStart, loopEnd, loopStep do
-		local member = i
-		if reversed then
-			member = #t_portraits - i + 1
+	-- if next player portrait should replace previous one
+	if t['p' .. side .. subname .. '_num'] == 1 and last and not main.coop then
+		if t_portraits[#t_portraits].anim_data ~= nil then
+			local v = t_portraits[#t_portraits]
+			f_slideDistCalc(v.slide_dist, t['p' .. side .. '_member1' .. subname .. '_slide_dist'], t['p' .. side .. '_member1' .. subname .. '_slide_speed'])
+			main.f_animPosDraw(
+				v.anim_data,
+				f_portraitsXCalc(side, t, subname, 1) + main.f_round(v.slide_dist[1]),
+				t['p' .. side .. subname .. '_pos'][2] + t['p' .. side .. subname .. '_offset'][2] + (main.f_tableExists(t['p' .. side .. '_member1' .. subname .. '_offset'])[2] or 0) + main.f_round(v.slide_dist[2]),
+				t['p' .. side .. subname .. '_facing'],
+				true
+			)
 		end
-		if i <= t['p' .. side .. subname .. '_num'] then
-			if t_portraits[i].anim_data ~= nil then
-				local v = t_portraits[i]
+		return
+	end
+	-- otherwise render portraits in order, up to the 'num' limit
+	for member = #t_portraits, 1, -1 do
+		if member <= t['p' .. side .. subname .. '_num'] --[[or (last and main.coop)]] then
+			if t_portraits[member].anim_data ~= nil then
+				local v = t_portraits[member]
 				f_slideDistCalc(v.slide_dist, t['p' .. side .. '_member' .. member .. subname .. '_slide_dist'], t['p' .. side .. '_member' .. member .. subname .. '_slide_speed'])
-				main.f_animPosDraw(
+					main.f_animPosDraw(
 					v.anim_data,
-					f_portraitsXCalc(side, t, subname, i, member) + main.f_round(v.slide_dist[1]),
-					t['p' .. side .. subname .. '_pos'][2] + t['p' .. side .. subname .. '_offset'][2] + (main.f_tableExists(t['p' .. side .. '_member' .. member .. subname .. '_offset'])[2] or 0) + (i - 1) * t['p' .. side .. subname .. '_spacing'][2] + main.f_round(v.slide_dist[2]),
+					f_portraitsXCalc(side, t, subname, member) + main.f_round(v.slide_dist[1]),
+					t['p' .. side .. subname .. '_pos'][2] + t['p' .. side .. subname .. '_offset'][2] + (main.f_tableExists(t['p' .. side .. '_member' .. member .. subname .. '_offset'])[2] or 0) + (member - 1) * t['p' .. side .. subname .. '_spacing'][2] + main.f_round(v.slide_dist[2]),
 					t['p' .. side .. subname .. '_facing'],
 					true
 				)
 			end
 		end
 	end
-	--draw order icons
+	-- draw order icons
 	if icon == nil then
 		return
 	end
-	for i = loopStart, loopEnd, loopStep do
-		local member = i
-		if reversed then
-			member = #t_portraits - i + 1
-		end
-		if i <= t['p' .. side .. subname .. '_num'] and t['p' .. side .. '_member' .. member .. subname .. icon .. '_data'] ~= nil then
+	for member = 1, #t_portraits do
+		if t['p' .. side .. '_member' .. member .. subname .. icon .. '_data'] ~= nil then
 			main.f_animPosDraw(
 				t['p' .. side .. '_member' .. member .. subname .. icon .. '_data'],
-				f_portraitsXCalc(side, t, subname, i, member),
-				t['p' .. side .. subname .. '_pos'][2] + t['p' .. side .. subname .. '_offset'][2] + (main.f_tableExists(t['p' .. side .. '_member' .. member .. subname .. '_offset'])[2] or 0) + (i - 1) * t['p' .. side .. subname .. '_spacing'][2]
+				f_portraitsXCalc(side, t, subname, member),
+				t['p' .. side .. subname .. '_pos'][2] + t['p' .. side .. subname .. '_offset'][2] + (main.f_tableExists(t['p' .. side .. '_member' .. member .. subname .. '_offset'])[2] or 0) + (member - 1) * t['p' .. side .. subname .. '_spacing'][2]
 			)
 		end
 	end
@@ -1539,6 +1547,10 @@ function start.f_selectReset(hardReset)
 			start.c[i].randRef = nil
 		end
 	end
+	if stageRandom then
+		stageListNo = 0
+		stageRandom = false
+	end
 	for side = 1, 2 do
 		if hardReset then
 			start.p[side].numSimul = math.max(2, config.NumSimul[1])
@@ -1772,11 +1784,12 @@ function launchFight(data)
 			return true --continue lua code execution
 		end
 	end
-	if config.BackgroundLoading then
-		selectStart()
-	else
+	--TODO: fix config.BackgroundLoading setting
+	--if config.BackgroundLoading then
+	--	selectStart()
+	--else
 		clearSelected()
-	end
+	--end
 	local ok = false
 	local saveData = false
 	local loopCount = 0
@@ -1964,7 +1977,7 @@ function start.f_selectScreen()
 		--draw portraits
 		for side = 1, 2 do
 			if #start.p[side].t_selTemp > 0 then
-				start.f_drawPortraits(start.p[side].t_selTemp, side, motif.select_info, '_face', true, false)
+				start.f_drawPortraits(start.p[side].t_selTemp, side, motif.select_info, '_face', true)
 			end
 		end
 		--draw cell art
@@ -2519,6 +2532,7 @@ function start.f_selectMenu(side, cmd, player, member, selectState)
 					cell = start.c[player].cell,
 					anim = motif.select_info['p' .. side .. '_member' .. member .. '_face_anim'] or motif.select_info['p' .. side .. '_face_anim'],
 					anim_data = start.f_animGet(start.c[player].selRef, side, member, motif.select_info, '_face', '', true),
+					face2_data = start.f_animGet(start.c[player].selRef, side, member, motif.select_info, '_face2', '', true),
 					slide_dist = {0, 0},
 				})
 			elseif start.p[side].t_selTemp[member].cell ~= start.c[player].cell or start.p[side].t_selTemp[member].ref ~= start.c[player].selRef then
@@ -2550,6 +2564,7 @@ function start.f_selectMenu(side, cmd, player, member, selectState)
 			--get anim data
 			if getAnim then
 				start.p[side].t_selTemp[member].anim_data = start.f_animGet(start.c[player].selRef, side, member, motif.select_info, '_face', '', true)
+				start.p[side].t_selTemp[member].face2_data = start.f_animGet(start.c[player].selRef, side, member, motif.select_info, '_face2', '', true)
 			end
 			--cell selected or select screen timer reached 0
 			if start.c[player].selRef ~= nil and ((start.f_slotSelected(start.c[player].cell + 1, side, cmd, player, start.c[player].selX, start.c[player].selY) and start.f_selGrid(start.c[player].cell + 1).char ~= nil and start.f_selGrid(start.c[player].cell + 1).hidden ~= 2) or (motif.select_info.timer_count ~= -1 and timerSelect == -1)) then
@@ -2820,7 +2835,7 @@ function start.f_selectVersus(active, t_orderSelect)
 		end
 		--draw portraits and order icons
 		for side = 1, 2 do
-			start.f_drawPortraits(start.p[side].t_selTemp, side, motif.vs_screen, '', false, true, t_icon[side])
+			start.f_drawPortraits(start.p[side].t_selTemp, side, motif.vs_screen, '', false, t_icon[side])
 		end
 		--draw names
 		for side = 1, 2 do
@@ -2892,9 +2907,10 @@ function start.f_selectLoading()
 			end
 		end
 	end
-	if not config.BackgroundLoading then
+	--TODO: fix config.BackgroundLoading setting
+	--if not config.BackgroundLoading then
 		loadStart()
-	end
+	--end
 	-- calling refresh() during netplay data loading can lead to synchronization error
 	--while motif.vs_screen.loading_data ~= nil and loading() and not network() do
 	--	animDraw(motif.vs_screen.loading_data)
@@ -3124,6 +3140,7 @@ function start.f_victoryOrder(side, paramSide, allow_ko, num)
 			ref = ref,
 			anim = motif.victory_screen['p' .. paramSide .. '_member' .. #t + 1 .. '_anim'] or motif.victory_screen['p' .. paramSide .. '_anim'],
 			anim_data = start.f_animGet(ref, paramSide, #t + 1, motif.victory_screen, '', '', true, {9000, 1}),
+			face2_data = start.f_animGet(ref, paramSide, #t + 1, motif.victory_screen, '_face2', '', true),
 			slide_dist = {0, 0},
 		})
 		t_matchList[ref] = (t_matchList[ref] or 0) + 1
@@ -3268,7 +3285,7 @@ function start.f_victory()
 	bgDraw(motif.victorybgdef.bg, false)
 	--draw portraits (starting from losers)
 	for side = 2, 1, -1 do
-		start.f_drawPortraits(start.t_victory['team' .. side], side, motif.victory_screen, '', false, false)
+		start.f_drawPortraits(start.t_victory['team' .. side], side, motif.victory_screen, '', false)
 	end
 	--draw winner name
 	t_txt_winquoteName[1]:draw()
