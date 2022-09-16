@@ -80,7 +80,7 @@ explod{
 #===============================================================================
 # StateTagEnteringScreen
 #===============================================================================
-[StateDef 5600;
+[StateDef const(StateTagEnteringScreen); 
 	type: S; moveType: H; physics: N;
 	anim: const(AnimTagEnteringScreen);
 	sprPriority: 2; ctrl: 0;
@@ -120,7 +120,7 @@ if backEdgeBodyDist >= 0 && (floor(map(_iksys_tagSwitchDist)) <= 0 || p2BodyDist
 #===============================================================================
 # StateTagLeavingScreen
 #===============================================================================
-[StateDef 5610;
+[StateDef const(StateTagLeavingScreen);
 	type: S; moveType: I; physics: N;
 	anim: const(AnimTagLeavingScreen); sprPriority: -2;
 	velSet: 0, 0; faceP2: 1;
@@ -137,13 +137,13 @@ if backEdgeDist < -const240p(160) || frontEdgeDist < -const240p(160) || map(_iks
 	changeState{value: const(StateTagWaitingOutside)}
 }
 
-# TODO: won't be needed once this bug is fixed: https://github.com/Windblade-GR01/Ikemen-GO/issues/171
+# TODO: won't be needed once this bug is fixed: https://github.com/ikemen-engine/Ikemen-GO/issues/171
 mapSet{map: "_iksys_tagLeavingPosX"; value: pos x}
 
 #===============================================================================
 # StateTagWaitingOutside
 #===============================================================================
-[StateDef 5611;
+[StateDef const(StateTagWaitingOutside);
 	type: A; moveType: I; physics: N;
 	anim: const(AnimStanding);
 	velSet: 0, 0; ctrl: 0;
@@ -163,7 +163,7 @@ posSet{
 #===============================================================================
 # StateTagJumpingIn
 #===============================================================================
-[StateDef 5620;
+[StateDef const(StateTagJumpingIn);
 	type: A; moveType: I; physics: N;
 	anim: const(AnimTagJumpingIn);
 	sprPriority: 2; ctrl: 0;
@@ -215,7 +215,7 @@ if time = 0 {
 #===============================================================================
 # StateTagLanding
 #===============================================================================
-[StateDef 5621;
+[StateDef const(StateTagLanding);
 	type: S; moveType: I; physics: N;
 	anim: const(AnimTagLanding);
 	sprPriority: 2; ctrl: 0;
@@ -268,7 +268,7 @@ if !const(Default.Enable.Tag) || isHelper || teamSide = 0 {
 			} else if $beingHit = 0 && (stateNo = const(StateStand) || pos y >= 0) {
 				# last active player has left the screen or died
 				if map(_iksys_tagLastId) = 0
-					|| playerId(map(_iksys_tagLastId)),stateNo = const(StateTagWaitingOutside)
+					|| playerId(map(_iksys_tagLastId)),stateNo = playerId(map(_iksys_tagLastId)),const(StateTagWaitingOutside)
 					|| playerId(map(_iksys_tagLastId)),alive = 0
 				{
 					# get partner id in case of tag command
@@ -288,14 +288,14 @@ if !const(Default.Enable.Tag) || isHelper || teamSide = 0 {
 						let partnerId = $previousPartnerId;
 					}
 					# having control, command buffered, partner standby
-					if ctrl && $partnerId > 0 && playerId($partnerId),stateNo = const(StateTagWaitingOutside) {
+					if ctrl && $partnerId > 0 && playerId($partnerId),stateNo = playerId($partnerId),const(StateTagWaitingOutside) {
 						mapSet{map: "_iksys_tagSwitchCooldown"; value: playerId($partnerId),const(TagSwitchCooldown); redirectId: $partnerId}
 						mapSet{map: "_iksys_tagPartnerId"; value: 0}
 						lifebarAction{spr: const(MsgPartnerChange), 0}
 						tagOut{}
 						ctrlSet{value: 0}
 						assertSpecial{flag: noHardcodedKeys; flag2: noInput}
-						tagIn{stateNo: const(StateTagEnteringScreen); redirectId: $partnerId}
+						tagIn{stateNo: playerId($partnerId),const(StateTagEnteringScreen); redirectId: $partnerId}
 					}
 				}
 			}
@@ -329,7 +329,7 @@ if !const(Default.Enable.Tag) || isHelper || teamSide = 0 {
 			mapSet{map: "_iksys_tagSwitchCooldown"; value: playerId($partnerId),const(TagSwitchCooldown); redirectId: $partnerId}
 			lifebarAction{spr: const(MsgPartnerChange), 0}
 			tagOut{}
-			tagIn{stateNo: const(StateTagJumpingIn); redirectId: $partnerId}
+			tagIn{stateNo: playerId($partnerId),const(StateTagJumpingIn); redirectId: $partnerId}
 		}
 	}
 	# Red Life regeneration

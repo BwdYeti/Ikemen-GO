@@ -46,50 +46,51 @@ func RandI(x, y int32) int32 {
 func RandF(x, y float32) float32 {
 	return x + float32(Random())*(y-x)/float32(IMax)
 }
+
 func Min(arg ...int32) (min int32) {
-	if len(arg) > 0 {
-		min = arg[0]
-		for i := 1; i < len(arg); i++ {
-			if arg[i] < min {
-				min = arg[i]
-			}
+	for i, x := range arg {
+		if i == 0 || x < min {
+			min = x
 		}
 	}
 	return
 }
+
 func Max(arg ...int32) (max int32) {
-	if len(arg) > 0 {
-		max = arg[0]
-		for i := 1; i < len(arg); i++ {
-			if arg[i] > max {
-				max = arg[i]
-			}
+	for i, x := range arg {
+		if i == 0 || x > max {
+			max = x
 		}
 	}
 	return
 }
+
 func MinF(arg ...float32) (min float32) {
-	if len(arg) > 0 {
-		min = arg[0]
-		for i := 1; i < len(arg); i++ {
-			if arg[i] < min {
-				min = arg[i]
-			}
+	for i, x := range arg {
+		if i == 0 || x < min {
+			min = x
 		}
 	}
 	return
 }
+
 func MaxF(arg ...float32) (max float32) {
-	if len(arg) > 0 {
-		max = arg[0]
-		for i := 1; i < len(arg); i++ {
-			if arg[i] > max {
-				max = arg[i]
-			}
+	for i, x := range arg {
+		if i == 0 || x > max {
+			max = x
 		}
 	}
 	return
 }
+
+func Clamp(x, a, b int32) int32 {
+	return Max(a, Min(x, b))
+}
+
+func ClampF(x, a, b float32) float32 {
+	return MaxF(a, MinF(x, b))
+}
+
 func Abs(i int32) int32 {
 	if i < 0 {
 		return -i
@@ -533,19 +534,10 @@ func (is IniSection) getText(name string) (str string, ok bool, err error) {
 	if !ok {
 		return
 	}
-	if len(str) < 2 || str[0] != '"' || str[len(str)-1] != '"' {
-		return "", false, Error("Not enclosed in \"")
-	}
-	str = str[1 : len(str)-1]
-	return
-}
-func (is IniSection) getString(name string) (str string, ok bool) {
-	str, ok = is[name]
-	if !ok {
-		return
-	}
 	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
 		str = str[1 : len(str)-1]
+	} else {
+		err = Error("Not enclosed in \"")
 	}
 	return
 }
@@ -618,10 +610,12 @@ func (l *Layout) DrawSprite(x, y float32, ln int16, s *Sprite, fx *PalFX, fscale
 		if l.vfacing < 0 {
 			y += sys.lifebar.fnt_scale * sys.lifebarScale
 		}
-		paltex := s.PalTex
+		if s.coldepth <= 8 && s.PalTex == nil {
+			s.CachePalette(s.Pal)
+		}
 		s.Draw(x+l.offset[0]*sys.lifebarScale, y+l.offset[1]*sys.lifebarScale,
 			l.scale[0]*float32(l.facing)*fscale, l.scale[1]*float32(l.vfacing)*fscale,
-			l.angle, s.Pal, fx, paltex, window)
+			l.angle, fx, window)
 	}
 }
 func (l *Layout) DrawAnim(r *[4]int32, x, y, scl float32, ln int16,
@@ -636,7 +630,7 @@ func (l *Layout) DrawAnim(r *[4]int32, x, y, scl float32, ln int16,
 		}
 		a.Draw(r, x+l.offset[0], y+l.offset[1]+float32(sys.gameHeight-240),
 			scl, scl, l.scale[0]*float32(l.facing), l.scale[0]*float32(l.facing),
-			l.scale[1]*float32(l.vfacing), 0, l.angle, 0, 0,
+			l.scale[1]*float32(l.vfacing), 0, Rotation{l.angle, 0, 0},
 			float32(sys.gameWidth-320)/2, palfx, false, 1, false, 1, 0, 0)
 	}
 }

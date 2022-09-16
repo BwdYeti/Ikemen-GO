@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-gl/glfw/v3.3/glfw"
+	glfw "github.com/fyne-io/glfw-js"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -408,6 +408,11 @@ func systemScriptInit(l *lua.LState) {
 					ch.setSCF(SCF_disabled)
 				}
 			} else if c.selfStatenoExist(BytecodeInt(st)) == BytecodeBool(true) {
+				for _, ch := range sys.getPlayerEtAl(pn) {
+					if ch.scf(SCF_disabled) {
+						ch.unsetSCF(SCF_disabled)
+					}
+				}
 				c.changeState(st, -1, -1, false)
 				l.Push(lua.LBool(true))
 				return 1
@@ -477,7 +482,7 @@ func systemScriptInit(l *lua.LState) {
 		if pn < 1 || pn > len(sys.gs.chars) || len(sys.gs.chars[pn-1]) == 0 {
 			l.RaiseError("\nPlayer not found: %v\n", pn)
 		}
-		sys.getChar(pn-1, 0).sounds = sys.getChar(pn-1, 0).sounds[:0]
+		sys.getChar(pn-1, 0).soundChannels.SetSize(0)
 		return 0
 	})
 	luaRegister(l, "charSpriteDraw", func(l *lua.LState) int {
@@ -509,8 +514,11 @@ func systemScriptInit(l *lua.LState) {
 						scale := [...]float32{float32(numArg(l, 5)), float32(numArg(l, 6))}
 						facing := int8(numArg(l, 7))
 						fscale := sys.getChar(pn-1, 0).localscl
+						if sprite.coldepth <= 8 && sprite.PalTex == nil {
+							sprite.CachePalette(sprite.Pal)
+						}
 						sprite.Draw(x, y, scale[0]*float32(facing)*fscale, scale[1]*fscale,
-							0, sprite.Pal, pfx, sprite.PalTex, window)
+							0, pfx, window)
 						ok = true
 					}
 				}
@@ -727,11 +735,7 @@ func systemScriptInit(l *lua.LState) {
 		} else if strArg(l, 1) == "fadein" {
 			a = math.Floor(255 - 255*(frame-1)/length)
 		}
-		if a < 0 {
-			a = 0
-		} else if a > 255 {
-			a = 255
-		}
+		a = float64(ClampF(float32(a), 0, 255))
 		if l.GetTop() >= 6 {
 			r = int32(numArg(l, 4))
 			g = int32(numArg(l, 5))
@@ -791,7 +795,7 @@ func systemScriptInit(l *lua.LState) {
 		if l.GetTop() >= 2 {
 			height = int32(numArg(l, 2))
 		}
-		filename := SearchFile(strArg(l, 1), []string{sys.motifDir, "", "data/", "font/"})
+		filename := SearchFile(strArg(l, 1), []string{"font/", sys.motifDir, "", "data/"})
 		fnt, err := loadFnt(filename, height)
 		if err != nil {
 			sys.errLog.Printf("failed to load %v (screenpack font): %v", filename, err)
@@ -893,7 +897,7 @@ func systemScriptInit(l *lua.LState) {
 							}
 						}
 						if c.roundsExisted() == 0 {
-							c.loadPallet()
+							c.loadPalette()
 						}
 						for j, cj := range sys.getPlayers() {
 							if i != j && cj != nil {
@@ -1043,6 +1047,10 @@ func systemScriptInit(l *lua.LState) {
 				sys.sel.sdefOverwrite = ""
 				l.Push(lua.LNumber(winp))
 				l.Push(tbl)
+				if sys.playBgmFlg {
+					sys.bgm.Open("", 1, 100, 0, 0)
+					sys.playBgmFlg = false
+				}
 				sys.clearAllSound()
 				sys.allPalFX = *newPalFX()
 				sys.bgPalFX = *newPalFX()
@@ -1296,7 +1304,7 @@ func systemScriptInit(l *lua.LState) {
 	})
 	luaRegister(l, "getJoystickPresent", func(*lua.LState) int {
 		joy := int(numArg(l, 1))
-		present := joystick[joy].Present()
+		present := joystick[joy].IsPresent()
 		l.Push(lua.LBool(present))
 		return 1
 	})
@@ -1308,7 +1316,7 @@ func systemScriptInit(l *lua.LState) {
 			max = min + 1
 		}
 		for joy = min; joy < max; joy++ {
-			if joystick[joy].Present() {
+			if joystick[joy].IsPresent() {
 				axes := joystick[joy].GetAxes()
 				btns := joystick[joy].GetButtons()
 				for i := range axes {
@@ -1318,6 +1326,17 @@ func systemScriptInit(l *lua.LState) {
 							s = strconv.Itoa(-i*2 - 2)
 						} else if axes[i] < -0.5 && i < 4 {
 							s = strconv.Itoa(-i*2 - 1)
+						}
+					} else if joystick[joy].GetGamepadName() == "PS3 Controller" {
+						if (len(axes) == 8 && i != 3 && i != 4 && i != 6 && i != 7) ||
+							(len(axes) == 6 && i != 2 && i != 5) {
+							// 8 axes in Windows (need to skip 3, 4, 6, 7) and
+							// 6 axes in Linux (need to skip 2 and 5)
+							if axes[i] < -0.2 {
+								s = strconv.Itoa(-i*2 - 1)
+							} else if axes[i] > 0.2 {
+								s = strconv.Itoa(-i*2 - 2)
+							}
 						}
 					} else if joystick[joy].GetGamepadName() != "PS4 Controller" || !(i == 3 || i == 4) {
 						if axes[i] < -0.2 {
@@ -1364,7 +1383,7 @@ func systemScriptInit(l *lua.LState) {
 		s := ""
 		if sys.keyInput != glfw.KeyUnknown {
 			if sys.keyInput == glfw.KeyInsert {
-				s = sys.window.Window.GetClipboardString()
+				s, _ = sys.window.Window.GetClipboardString()
 			} else {
 				s = sys.keyString
 			}
@@ -1595,7 +1614,7 @@ func systemScriptInit(l *lua.LState) {
 		return 0
 	})
 	luaRegister(l, "refresh", func(*lua.LState) int {
-		sys.playSound()
+		sys.tickSound()
 		if !sys.update() {
 			l.RaiseError("<game end>")
 		}
@@ -2241,18 +2260,6 @@ func systemScriptInit(l *lua.LState) {
 		time.Sleep(time.Duration((numArg(l, 1))) * time.Second)
 		return 0
 	})
-	luaRegister(l, "sndGetLength", func(*lua.LState) int {
-		s, ok := toUserData(l, 1).(*Snd)
-		if !ok {
-			userDataError(l, 1, s)
-		}
-		var frames int32
-		if w := s.Get([...]int32{int32(numArg(l, 2)), int32(numArg(l, 3))}); w != nil {
-			frames = int32(math.Ceil(float64(w.getDuration() * 60)))
-		}
-		l.Push(lua.LNumber(frames))
-		return 1
-	})
 	luaRegister(l, "sndNew", func(l *lua.LState) int {
 		snd, err := LoadSnd(strArg(l, 1))
 		if err != nil {
@@ -2284,12 +2291,7 @@ func systemScriptInit(l *lua.LState) {
 		}
 		var f bool
 		if w := s.Get([...]int32{int32(numArg(l, 2)), int32(numArg(l, 3))}); w != nil {
-			for _, v := range sys.sounds {
-				if v.sound != nil && v.sound == w {
-					f = true
-					break
-				}
-			}
+			f = sys.soundChannels.IsPlaying(w)
 		}
 		l.Push(lua.LBool(f))
 		return 1
@@ -2550,20 +2552,12 @@ func systemScriptInit(l *lua.LState) {
 		sys.bgm.UpdateVolume()
 		return 0
 	})
-	luaRegister(l, "waveGetLength", func(*lua.LState) int {
-		w, ok := toUserData(l, 1).(*Wave)
-		if !ok {
-			userDataError(l, 1, w)
-		}
-		l.Push(lua.LNumber(int32(math.Ceil(float64(w.getDuration() * 60)))))
-		return 1
-	})
 	luaRegister(l, "wavePlay", func(l *lua.LState) int {
-		w, ok := toUserData(l, 1).(*Wave)
+		s, ok := toUserData(l, 1).(*Sound)
 		if !ok {
-			userDataError(l, 1, w)
+			userDataError(l, 1, s)
 		}
-		w.play()
+		sys.soundChannels.Play(s, 100, 0.0)
 		return 0
 	})
 }
@@ -2749,7 +2743,7 @@ func triggerFunctions(l *lua.LState) {
 		case "data.defence":
 			ln = lua.LNumber(c.gi().data.defence)
 		case "data.fall.defence_mul":
-			ln = lua.LNumber(c.gi().data.fall.defence_mul)
+			ln = lua.LNumber(1.0 / c.gi().data.fall.defence_mul)
 		case "data.liedown.time":
 			ln = lua.LNumber(c.gi().data.liedown.time)
 		case "data.airjuggle":
@@ -2776,8 +2770,6 @@ func triggerFunctions(l *lua.LState) {
 			ln = lua.LNumber(c.size.air.back)
 		case "size.air.front":
 			ln = lua.LNumber(c.size.air.front)
-		case "size.z.width":
-			ln = lua.LNumber(c.size.z.width)
 		case "size.height":
 			ln = lua.LNumber(c.size.height)
 		case "size.attack.dist":
@@ -2804,6 +2796,10 @@ func triggerFunctions(l *lua.LState) {
 			ln = lua.LNumber(c.size.draw.offset[0])
 		case "size.draw.offset.y":
 			ln = lua.LNumber(c.size.draw.offset[1])
+		case "size.z.width":
+			ln = lua.LNumber(c.size.z.width)
+		case "size.z.enable":
+			ln = lua.LNumber(Btoi(c.size.z.enable))
 		case "velocity.walk.fwd.x":
 			ln = lua.LNumber(c.gi().velocity.walk.fwd)
 		case "velocity.walk.back.x":
@@ -2995,6 +2991,12 @@ func triggerFunctions(l *lua.LState) {
 			ln = lua.LNumber(0)
 		case "animtype":
 			ln = lua.LNumber(c.gethitAnimtype())
+		case "air.animtype":
+			ln = lua.LNumber(c.ghv.airanimtype)
+		case "ground.animtype":
+			ln = lua.LNumber(c.ghv.groundanimtype)
+		case "fall.animtype":
+			ln = lua.LNumber(c.ghv.fall.animtype)
 		case "airtype":
 			ln = lua.LNumber(c.ghv.airtype)
 		case "groundtype":
@@ -3244,13 +3246,13 @@ func triggerFunctions(l *lua.LState) {
 		if n <= 2 {
 			l.Push(lua.LString(sys.debugWC.name))
 		} else if ^n&1+1 == 1 {
-			if p := sys.debugWC.partner(n/2 - 1, false); p != nil {
+			if p := sys.debugWC.partner(n/2-1, false); p != nil {
 				l.Push(lua.LString(p.name))
 			} else {
 				l.Push(lua.LString(""))
 			}
 		} else {
-			if p := sys.gs.charList.enemyNear(sys.debugWC, n/2-1, true, false); p != nil &&
+			if p := sys.gs.charList.enemyNear(sys.debugWC, n/2-1, true, true, false); p != nil &&
 				!(p.scf(SCF_ko) && p.scf(SCF_over)) {
 				l.Push(lua.LString(p.name))
 			} else {
@@ -3500,16 +3502,78 @@ func triggerFunctions(l *lua.LState) {
 		return 1
 	})
 	luaRegister(l, "stagevar", func(*lua.LState) int {
-		var s string
 		switch strArg(l, 1) {
 		case "info.name":
-			s = sys.stage.name
+			l.Push(lua.LString(sys.stage.name))
 		case "info.displayname":
-			s = sys.stage.displayname
+			l.Push(lua.LString(sys.stage.displayname))
 		case "info.author":
-			s = sys.stage.author
+			l.Push(lua.LString(sys.stage.author))
+		case "camera.boundleft":
+			l.Push(lua.LNumber(sys.stage.stageCamera.boundleft))
+		case "camera.boundright":
+			l.Push(lua.LNumber(sys.stage.stageCamera.boundright))
+		case "camera.boundhigh":
+			l.Push(lua.LNumber(sys.stage.stageCamera.boundhigh))
+		case "camera.boundlow":
+			l.Push(lua.LNumber(sys.stage.stageCamera.boundlow))
+		case "camera.verticalfollow":
+			l.Push(lua.LNumber(sys.stage.stageCamera.verticalfollow))
+		case "camera.floortension":
+			l.Push(lua.LNumber(sys.stage.stageCamera.floortension))
+		case "camera.tensionhigh":
+			l.Push(lua.LNumber(sys.stage.stageCamera.tensionhigh))
+		case "camera.tensionlow":
+			l.Push(lua.LNumber(sys.stage.stageCamera.tensionlow))
+		case "camera.tension":
+			l.Push(lua.LNumber(sys.stage.stageCamera.tension))
+		case "camera.startzoom":
+			l.Push(lua.LNumber(sys.stage.stageCamera.startzoom))
+		case "camera.zoomout":
+			l.Push(lua.LNumber(sys.stage.stageCamera.zoomout))
+		case "camera.zoomin":
+			l.Push(lua.LNumber(sys.stage.stageCamera.zoomin))
+		case "camera.ytension.enable":
+			l.Push(lua.LBool(sys.stage.stageCamera.ytensionenable))
+		case "playerinfo.leftbound":
+			l.Push(lua.LNumber(sys.stage.leftbound))
+		case "playerinfo.rightbound":
+			l.Push(lua.LNumber(sys.stage.rightbound))
+		case "scaling.topscale":
+			l.Push(lua.LNumber(sys.stage.stageCamera.ztopscale))
+		case "bound.screenleft":
+			l.Push(lua.LNumber(sys.stage.screenleft))
+		case "bound.screenright":
+			l.Push(lua.LNumber(sys.stage.screenright))
+		case "stageinfo.zoffset":
+			l.Push(lua.LNumber(sys.stage.stageCamera.zoffset))
+		case "stageinfo.zoffsetlink":
+			l.Push(lua.LNumber(sys.stage.zoffsetlink))
+		case "stageinfo.xscale":
+			l.Push(lua.LNumber(sys.stage.scale[0]))
+		case "stageinfo.yscale":
+			l.Push(lua.LNumber(sys.stage.scale[1]))
+		case "shadow.intensity":
+			l.Push(lua.LNumber(sys.stage.sdw.intensity))
+		case "shadow.color.r":
+			l.Push(lua.LNumber(int32((sys.stage.sdw.color & 0xFF0000) >> 16)))
+		case "shadow.color.g":
+			l.Push(lua.LNumber(int32((sys.stage.sdw.color & 0xFF00) >> 8)))
+		case "shadow.color.b":
+			l.Push(lua.LNumber(int32(sys.stage.sdw.color & 0xFF)))
+		case "shadow.yscale":
+			l.Push(lua.LNumber(sys.stage.sdw.yscale))
+		case "shadow.fade.range.begin":
+			l.Push(lua.LNumber(sys.stage.sdw.fadebgn))
+		case "shadow.fade.range.end":
+			l.Push(lua.LNumber(sys.stage.sdw.fadeend))
+		case "shadow.xshear":
+			l.Push(lua.LNumber(sys.stage.sdw.xshear))
+		case "reflection.intensity":
+			l.Push(lua.LNumber(sys.stage.reflection))
+		default:
+			l.Push(lua.LString(""))
 		}
-		l.Push(lua.LString(s))
 		return 1
 	})
 	luaRegister(l, "sysfvar", func(*lua.LState) int {
@@ -3730,6 +3794,12 @@ func triggerFunctions(l *lua.LState) {
 			l.Push(lua.LBool(sys.debugWC.sf(CSF_animfreeze)))
 		case "postroundinput":
 			l.Push(lua.LBool(sys.debugWC.sf(CSF_postroundinput)))
+		case "nodizzypointsdamage":
+			l.Push(lua.LBool(sys.debugWC.sf(CSF_nodizzypointsdamage)))
+		case "noguardpointsdamage":
+			l.Push(lua.LBool(sys.debugWC.sf(CSF_noguardpointsdamage)))
+		case "noredlifedamage":
+			l.Push(lua.LBool(sys.debugWC.sf(CSF_noredlifedamage)))
 		// GlobalSpecialFlag
 		case "intro":
 			l.Push(lua.LBool(sys.sf(GSF_intro)))
@@ -3757,6 +3827,8 @@ func triggerFunctions(l *lua.LState) {
 			l.Push(lua.LBool(sys.sf(GSF_nokovelocity)))
 		case "roundnotskip":
 			l.Push(lua.LBool(sys.sf(GSF_roundnotskip)))
+		case "roundfreeze":
+			l.Push(lua.LBool(sys.sf(GSF_roundfreeze)))
 		// SystemCharFlag
 		case "over":
 			l.Push(lua.LBool(sys.debugWC.scf(SCF_over)))

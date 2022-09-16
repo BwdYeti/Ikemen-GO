@@ -76,7 +76,7 @@ func readLbText(pre string, is IniSection, str string, ln int16, f []*Fnt, align
 		txt.font[0] = -1
 	}
 	if _, ok := is[pre+"text"]; ok {
-		txt.text, _ = is.getString(pre + "text")
+		txt.text, _, _ = is.getText(pre + "text")
 	} else {
 		txt.text = str
 	}
@@ -957,9 +957,11 @@ func readLifeBarFace(pre string, is IniSection,
 func (fa *LifeBarFace) step(ref int, far *LifeBarFace) {
 	group, number := int16(fa.face_spr[0]), int16(fa.face_spr[1])
 	p := sys.getChar(ref, 0)
-	if mg, ok := p.anim.remap[group]; ok {
-		if mn, ok := mg[number]; ok {
-			group, number = mn[0], mn[1]
+	if p != nil {
+		if mg, ok := p.anim.remap[group]; ok {
+			if mn, ok := mg[number]; ok {
+				group, number = mn[0], mn[1]
+			}
 		}
 	}
 	if far.old_spr[0] != int32(group) || far.old_spr[1] != int32(number) ||
@@ -1372,7 +1374,7 @@ func readLifeBarCombo(pre string, is IniSection,
 	is.ReadF32(pre+"showspeed", &co.showspeed)
 	co.showspeed = MaxF(1, co.showspeed)
 	is.ReadF32(pre+"hidespeed", &co.hidespeed)
-	co.separator, _ = is.getString("format.decimal.separator")
+	co.separator, _, _ = is.getText("format.decimal.separator")
 	is.ReadI32("format.decimal.places", &co.places)
 	return co
 }
@@ -1978,7 +1980,7 @@ func (ro *LifeBarRound) callFight() {
 	ro.timerActive = true
 }
 func (ro *LifeBarRound) act() bool {
-	if sys.paused && !sys.step {
+	if (sys.paused && !sys.step) || sys.sf(GSF_roundfreeze) {
 		return false
 	}
 	if sys.intro > ro.ctrl_time {
@@ -2185,6 +2187,7 @@ func (ro *LifeBarRound) act() bool {
 	return sys.tickNextFrame()
 }
 func (ro *LifeBarRound) reset() {
+	ro.cur = 0
 	ro.round_default.Reset()
 	ro.round_default_top.Reset()
 	for i := range ro.round_default_bg {
@@ -2575,8 +2578,8 @@ func readLifeBarScore(pre string, is IniSection,
 	sc := newLifeBarScore()
 	is.ReadI32(pre+"pos", &sc.pos[0], &sc.pos[1])
 	sc.text = *readLbText(pre+"text.", is, "", 0, f, 0)
-	sc.separator[0], _ = is.getString("format.integer.separator")
-	sc.separator[1], _ = is.getString("format.decimal.separator")
+	sc.separator[0], _, _ = is.getText("format.integer.separator")
+	sc.separator[1], _, _ = is.getText("format.decimal.separator")
 	is.ReadI32("format.integer.pad", &sc.pad)
 	is.ReadI32("format.decimal.places", &sc.places)
 	is.ReadF32("score.min", &sc.min)
@@ -2719,7 +2722,7 @@ func readLifeBarAiLevel(pre string, is IniSection,
 	ai := newLifeBarAiLevel()
 	is.ReadI32(pre+"pos", &ai.pos[0], &ai.pos[1])
 	ai.text = *readLbText(pre+"text.", is, "", 0, f, 0)
-	ai.separator, _ = is.getString("format.decimal.separator")
+	ai.separator, _, _ = is.getText("format.decimal.separator")
 	is.ReadI32("format.decimal.places", &ai.places)
 	ai.bg = *ReadAnimLayout(pre+"bg.", is, sff, at, 0)
 	ai.top = *ReadAnimLayout(pre+"top.", is, sff, at, 0)
@@ -2935,7 +2938,7 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 		nm: [...][]*LifeBarName{make([]*LifeBarName, 2), make([]*LifeBarName, 8),
 			make([]*LifeBarName, 2), make([]*LifeBarName, 8), make([]*LifeBarName, 6),
 			make([]*LifeBarName, 8), make([]*LifeBarName, 6), make([]*LifeBarName, 8)},
-		active: true, bars: true, mode: true, fx_scale: float32(math.NaN()), fnt_scale: 1}
+		active: true, bars: true, mode: true, fx_scale: 1, fnt_scale: 1}
 	l.missing = map[string]int{
 		"[tag lifebar]": 3, "[simul_3p lifebar]": 4, "[simul_4p lifebar]": 5,
 		"[tag_3p lifebar]": 6, "[tag_4p lifebar]": 7, "[simul powerbar]": 1,
@@ -3030,7 +3033,8 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 					return nil, err
 				}
 				for i := range l.fnt {
-					if is.LoadFile(fmt.Sprintf("font%v", i), []string{deffile, sys.motifDir, "", "data/", "font/"},
+					/*if*/
+					is.LoadFile(fmt.Sprintf("font%v", i), []string{deffile, sys.motifDir, "", "data/", "font/"},
 						func(filename string) error {
 							var height int32 = -1
 							if len(is[fmt.Sprintf("font%v.height", i)]) > 0 {
@@ -3041,9 +3045,11 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 								l.fnt[i] = newFnt()
 							}
 							return err
-						}); err != nil {
+						},
+					)
+					/*err != nil {
 						//return nil, err
-					}
+					}*/
 				}
 			}
 		case "fightfx":
@@ -3395,9 +3401,9 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 		}
 	}
 	//fightfx scale
-	if math.IsNaN(float64(l.fx_scale)) {
-		l.fx_scale = float32(sys.lifebarLocalcoord[0]) / 320
-	}
+	//if math.IsNaN(float64(l.fx_scale)) {
+	//	l.fx_scale = float32(sys.lifebarLocalcoord[0]) / 320
+	//}
 	for _, a := range l.fat {
 		a.start_scale = [...]float32{sys.lifebarScale * l.fx_scale, sys.lifebarScale * l.fx_scale}
 	}
@@ -3572,10 +3578,10 @@ func (l *Lifebar) step() {
 			if c.alive() || !c.scf(SCF_over) {
 				// Fake Combo
 				if c.receivedHits > cb[^i&1] {
-					cb[^i&1] = Min(999, Max(c.fakeReceivedHits, cb[^i&1]))
+					cb[^i&1] = Clamp(cb[^i&1], c.fakeReceivedHits, 999)
 				}
 				if c.fakeReceivedHits > fcb[^i&1] {
-					fcb[^i&1] = Min(999, Max(c.fakeReceivedHits, fcb[^i&1]))
+					fcb[^i&1] = Clamp(fcb[^i&1], c.fakeReceivedHits, 999)
 					cd[^i&1] = Max(c.fakeComboDmg, cd[^i&1])
 					cp[^i&1] = float32(cd[^i&1]) / float32(c.lifeMax) * 100
 				}

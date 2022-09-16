@@ -6,15 +6,19 @@ import (
 	"os"
 	"regexp"
 	"strings"
-
-	findfont "github.com/flopp/go-findfont"
-	"github.com/ikemen-engine/glfont"
 )
 
 // FntCharImage stores sprite and position
 type FntCharImage struct {
 	ofs, w uint16
 	img    []Sprite
+}
+
+// TtfFont implements TTF font rendering on supported platforms
+type TtfFont interface {
+	SetColor(red float32, green float32, blue float32, alpha float32)
+	Width(scale float32, fs string, argv ...interface{}) float32
+	Printf(x, y float32, scale float32, align int32, blend bool, window [4]int32, fs string, argv ...interface{}) error
 }
 
 // Fnt is a interface for basic font information
@@ -29,7 +33,7 @@ type Fnt struct {
 	Spacing   [2]int32
 	colors    int32
 	offset    [2]int32
-	ttf       *glfont.Font
+	ttf       TtfFont
 	paltex    *Texture
 }
 
@@ -86,12 +90,12 @@ func loadFntV1(filename string) (*Fnt, error) {
 		return nil, err
 	}
 
-	var pcxDataOffset, pcxDataLenght, txtDataOffset, txtDataLenght uint32
+	var pcxDataOffset, pcxDataLength, txtDataOffset, txtDataLength uint32
 	if err := read(&pcxDataOffset); err != nil {
 		return nil, err
 	}
 
-	if err := read(&pcxDataLenght); err != nil {
+	if err := read(&pcxDataLength); err != nil {
 		return nil, err
 	}
 
@@ -99,7 +103,7 @@ func loadFntV1(filename string) (*Fnt, error) {
 		return nil, err
 	}
 
-	if err := read(&txtDataLenght); err != nil {
+	if err := read(&txtDataLength); err != nil {
 		return nil, err
 	}
 
@@ -109,7 +113,7 @@ func loadFntV1(filename string) (*Fnt, error) {
 	}
 
 	fp.Seek(int64(pcxDataOffset)+128, 0)
-	px := make([]byte, pcxDataLenght-128-768)
+	px := make([]byte, pcxDataLength-128-768)
 	if err := read(px); err != nil {
 		return nil, err
 	}
@@ -125,7 +129,7 @@ func loadFntV1(filename string) (*Fnt, error) {
 
 	px = spr.RlePcxDecode(px)
 	fp.Seek(int64(txtDataOffset), 0)
-	buf = make([]byte, txtDataLenght)
+	buf = make([]byte, txtDataLength)
 	if err := read(buf); err != nil {
 		return nil, err
 	}
@@ -290,12 +294,7 @@ func loadDefInfo(f *Fnt, filename string, is IniSection, height int32) {
 	if len(ary) > 1 && len(ary[1]) > 0 {
 		f.Spacing[1] = Atoi(ary[1])
 	}
-	f.colors = Atoi(is["colors"])
-	if f.colors > 255 {
-		f.colors = 255
-	} else if f.colors < 1 {
-		f.colors = 1
-	}
+	f.colors = Clamp(Atoi(is["colors"]), 1, 255)
 	ary = SplitAndTrim(is["offset"], ",")
 	if len(ary[0]) > 0 {
 		f.offset[0] = Atoi(ary[0])
@@ -306,52 +305,16 @@ func loadDefInfo(f *Fnt, filename string, is IniSection, height int32) {
 
 	if len(is["file"]) > 0 {
 		if f.Type == "truetype" {
-			loadFntTtf(f, filename, is["file"], height)
+			LoadFntTtf(f, filename, is["file"], height)
 		} else {
-			loadFntSff(f, filename, is["file"])
+			LoadFntSff(f, filename, is["file"])
 		}
 	}
 }
 
-func loadFntTtf(f *Fnt, fontfile string, filename string, height int32) {
-	//Search in local directory
-	fileDir := SearchFile(filename, []string{fontfile, sys.motifDir, "", "data/", "font/"})
-	//Search in system directory
-	fp := fileDir
-	if fp = FileExist(fp); len(fp) == 0 {
-		var err error
-		fileDir, err = findfont.Find(fileDir)
-		if err != nil {
-			panic(err)
-		}
-	}
-	//Load ttf
-	if height == -1 {
-		height = int32(f.Size[1])
-	} else {
-		f.Size[1] = uint16(height)
-	}
-	ttf, err := glfont.LoadFont(fileDir, height, int(sys.gameWidth), int(sys.gameHeight), sys.fontShaderVer)
-	if err != nil {
-		panic(err)
-	}
-	f.ttf = ttf
-
-	//Create Ttf dummy palettes
-	f.palettes = make([][256]uint32, 1)
-	for i := 0; i < 256; i++ {
-		f.palettes[0][i] = 0
-	}
-}
-
-func loadFntSff(f *Fnt, fontfile string, filename string) {
-	fileDir := SearchFile(filename, []string{fontfile, sys.motifDir, "", "data/", "font/"})
+func LoadFntSff(f *Fnt, fontfile string, filename string) {
+	fileDir := SearchFile(filename, []string{fontfile, "font/", sys.motifDir, "", "data/"})
 	sff, err := loadSff(fileDir, false)
-
-	if err != nil {
-		err = nil
-		sff, err = loadSff(fileDir, false)
-	}
 
 	if err != nil {
 		panic(err)
@@ -463,7 +426,7 @@ func (f *Fnt) drawChar(
 	x, y,
 	xscl, yscl float32,
 	bank, bt int32,
-	c rune, pal []uint32, 
+	c rune, pal []uint32,
 	window *[4]int32,
 	palfx *PalFX,
 ) float32 {
@@ -486,20 +449,20 @@ func (f *Fnt) drawChar(
 
 	x -= xscl * float32(spr.Offset[0])
 	y -= yscl * float32(spr.Offset[1])
-
-	spr.glDraw(pal, 0,
-		-x*sys.widthScale, -y*sys.heightScale, &notiling,
-		xscl*sys.widthScale, xscl*sys.widthScale,
-		yscl*sys.heightScale, 0,
-		0, 0, 0,
-		sys.brightness*255>>8|1<<9,
-		window, 0, 0,
-		nil, f.paltex,
-		0, 0, -xscl * float32(spr.Offset[0]), -yscl*float32(spr.Offset[1]),
-	)
-	if f.paltex == nil {
-		f.paltex = spr.PalTex
+	if spr.coldepth <= 8 && f.paltex == nil {
+		f.paltex = spr.CachePalette(pal)
 	}
+	rp := RenderParams{
+		spr.Tex, f.paltex, spr.Size,
+		-x*sys.widthScale, -y*sys.heightScale, notiling,
+		xscl*sys.widthScale, xscl*sys.widthScale,
+		yscl*sys.heightScale, 1, 0,
+		Rotation{},
+		sys.brightness*255>>8|1<<9, 0,
+		nil, window, 0, 0,
+		0, 0, -xscl*float32(spr.Offset[0]), -yscl*float32(spr.Offset[1]),
+	}
+	RenderSprite(rp)
 	return float32(spr.Size[0]) * xscl
 }
 
@@ -572,7 +535,7 @@ func (f *Fnt) DrawTtf(txt string, x, y, xscl, yscl float32, align int32,
 		(*window)[2], (*window)[3]}
 
 	f.ttf.SetColor(frgba[0], frgba[1], frgba[2], frgba[3])
-	f.ttf.Printf(x, y, (xscl+yscl)/2, align, blend, win, strings.Replace(txt, "%", "%%", -1)) //x, y, scale, align, blend, window, string, printf args
+	f.ttf.Printf(x, y, (xscl+yscl)/2, align, blend, win, "%s", txt) //x, y, scale, align, blend, window, string, printf args
 }
 
 type TextSprite struct {
