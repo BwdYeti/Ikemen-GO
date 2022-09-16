@@ -3356,7 +3356,7 @@ func (sc explod) Run(c *Char, _ []int32) bool {
 				}
 			}
 		case explod_anim:
-			e.anim = *crun.getAnim(exp[1].evalI(c), exp[0].evalB(c), false)
+			e.setAnim(crun.getAnim(exp[1].evalI(c), exp[0].evalB(c), false))
 			if !e.anim.nilAnim && exp[0].evalB(c) { // ffx
 				e.anim.start_scale[0] /= crun.localscl
 				e.anim.start_scale[1] /= crun.localscl
@@ -3677,7 +3677,7 @@ func (sc gameMakeAnim) Run(c *Char, _ []int32) bool {
 		case gameMakeAnim_under:
 			e.ontop = !exp[0].evalB(c)
 		case gameMakeAnim_anim:
-			e.anim = *crun.getAnim(exp[1].evalI(c), exp[0].evalB(c), false)
+			e.setAnim(crun.getAnim(exp[1].evalI(c), exp[0].evalB(c), false))
 			if !e.anim.nilAnim && exp[0].evalB(c) { // ffx
 				e.anim.start_scale[0] /= crun.localscl
 				e.anim.start_scale[1] /= crun.localscl
