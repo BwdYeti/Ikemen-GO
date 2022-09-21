@@ -758,6 +758,9 @@ func (s *System) loaderReset() {
 	s.loader.reset()
 }
 func (s *System) loadStart() {
+	// Reset game state
+	s.gs = GameState{}
+
 	s.loaderReset()
 	s.loader.runTread()
 }
