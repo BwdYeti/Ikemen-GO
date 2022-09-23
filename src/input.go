@@ -743,10 +743,13 @@ type CommandBuffer struct {
 	ab, bb, cb, xb, yb, zb, sb, db, wb, mb int32
 	B, D, F, U                             int8
 	a, b, c, x, y, z, s, d, w, m           int8
+	
+	nilBuffer                              bool
 }
 
 func NewCommandBuffer() (c *CommandBuffer) {
 	c = &CommandBuffer{}
+	c.nilBuffer = false
 	c.Reset()
 	return
 }
@@ -1941,7 +1944,7 @@ func (c *Command) Step(cbuf *CommandBuffer, ai, hitpause bool, buftime int32) {
 }
 
 type CommandList struct {
-	Buffer            *CommandBuffer
+	Buffer            CommandBuffer
 	Names             map[string]int
 	Commands          [][]Command
 	DefaultTime       int32
@@ -1949,11 +1952,11 @@ type CommandList struct {
 }
 
 func NewCommandList(cb *CommandBuffer) *CommandList {
-	return &CommandList{Buffer: cb, Names: make(map[string]int),
+	return &CommandList{Buffer: *cb, Names: make(map[string]int),
 		DefaultTime: 15, DefaultBufferTime: 1}
 }
 func (cl *CommandList) Input(i int, facing int32, aiLevel float32, ib InputBits) bool {
-	if cl.Buffer == nil {
+	if cl.Buffer.nilBuffer {
 		return false
 	}
 	step := cl.Buffer.Bb != 0
@@ -1963,9 +1966,9 @@ func (cl *CommandList) Input(i int, facing int32, aiLevel float32, ib InputBits)
 	_else := i < 0
 	if _else {
 	} else if sys.fileInput != nil {
-		sys.fileInput.Input(cl.Buffer, i, facing)
+		sys.fileInput.Input(&cl.Buffer, i, facing)
 	} else if sys.netInput != nil {
-		sys.netInput.Input(cl.Buffer, i, facing)
+		sys.netInput.Input(&cl.Buffer, i, facing)
 	} else {
 		_else = true
 	}
@@ -2070,16 +2073,16 @@ func (cl *CommandList) Input(i int, facing int32, aiLevel float32, ib InputBits)
 }
 func (cl *CommandList) Step(facing int32, ai, hitpause bool,
 	buftime int32) {
-	if cl.Buffer != nil {
+	if !cl.Buffer.nilBuffer {
 		for i := range cl.Commands {
 			for j := range cl.Commands[i] {
-				cl.Commands[i][j].Step(cl.Buffer, ai, hitpause, buftime)
+				cl.Commands[i][j].Step(&cl.Buffer, ai, hitpause, buftime)
 			}
 		}
 	}
 }
 func (cl *CommandList) BufReset() {
-	if cl.Buffer != nil {
+	if !cl.Buffer.nilBuffer {
 		cl.Buffer.Reset()
 		for i := range cl.Commands {
 			for j := range cl.Commands[i] {

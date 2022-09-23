@@ -5720,7 +5720,7 @@ func (c *Char) tick() {
 	if c.cmd == nil {
 		if c.keyctrl[0] {
 			c.cmd = make([]CommandList, len(sys.gs.chars))
-			c.cmd[0].Buffer = NewCommandBuffer()
+			c.cmd[0].Buffer = *NewCommandBuffer()
 			for i := range c.cmd {
 				c.cmd[i].Buffer = c.cmd[0].Buffer
 				c.cmd[i].CopyList(sys.getChar(c.playerNo, 0).cmd[i])
