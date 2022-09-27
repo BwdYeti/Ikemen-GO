@@ -2135,7 +2135,7 @@ func (s *System) fight() (reload bool) {
 		}
 
 		// Update game state
-		s.action(&x, &y, &scl)
+		s.TickGameState(s.gs, &x, &y, &scl)
 
 		// F4 pressed to restart round
 		if s.roundResetFlg && !s.postMatchFlg {
@@ -2211,6 +2211,19 @@ func (s *System) fight() (reload bool) {
 	}
 
 	return false
+}
+
+func (s *System) TickGameState(gs *GameState, x, y, scl *float32) {
+	// Store singleton game state
+	storedGs := s.gs
+	// Set singleton game state to the passed game state
+	s.gs = gs
+
+	// Tick game state
+	s.action(x, y, scl)
+
+	// Restore game state
+	s.gs = storedGs
 }
 
 type wincntMap map[string][]int32
