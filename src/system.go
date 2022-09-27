@@ -37,7 +37,7 @@ var (
 // The only instance of a System struct.
 // Do not create more than 1.
 var sys = System{
-	gs:                GameState{randseed:int32(time.Now().UnixNano()), cam: *newCamera()},
+	gs:                NewGameState(),
 	scrrect:           [...]int32{0, 0, 320, 240},
 	gameWidth:         320,
 	gameHeight:        240,
@@ -114,6 +114,10 @@ type GameState struct {
 	topexplDrawlist         [MaxSimul*2 + MaxAttachedChar][]int
 	underexplDrawlist       [MaxSimul*2 + MaxAttachedChar][]int
 	cam                     Camera
+}
+
+func NewGameState() *GameState {
+	return &GameState{randseed:int32(time.Now().UnixNano()), cam: *newCamera()}
 }
 
 // Create a new Char and add it to the game state.
@@ -237,7 +241,7 @@ type System struct {
 	loader                  Loader
 
 	// Game State
-	gs                      GameState
+	gs                      *GameState
 	cgi                     [MaxSimul*2 + MaxAttachedChar]CharGlobalInfo
 	tmode                   [2]TeamMode
 	numSimul, numTurns      [2]int32
@@ -668,7 +672,7 @@ func (s *System) loaderReset() {
 }
 func (s *System) loadStart() {
 	// Reset game state
-	s.gs = GameState{}
+	s.gs = &GameState{}
 
 	s.loaderReset()
 	s.loader.runTread()
