@@ -26,6 +26,7 @@ import (
 const (
 	MaxSimul        = 4
 	MaxAttachedChar = 1
+	RollbackFrames  = 8
 )
 
 var (
@@ -285,6 +286,8 @@ type System struct {
 	// Game State
 	gs                      *GameState
 	savedGs                 *GameState
+	rollbackGs              [RollbackFrames]*GameState
+
 	saveStateFlag           bool
 	loadStateFlag           bool
 	cgi                     [MaxSimul*2 + MaxAttachedChar]CharGlobalInfo
@@ -2092,10 +2095,21 @@ func (s *System) fight() (reload bool) {
 		} else if s.loadStateFlag {
 			if (s.savedGs != nil) {
 				s.gs = s.savedGs.clone()
+				
+				// Reset rollback frames
+				for i := range s.rollbackGs {
+					s.rollbackGs[i] = nil
+				}
 			}
 		}
 		s.saveStateFlag = false;
 		s.loadStateFlag = false;
+
+		// Save and shift rollback frames
+		for i := 0; i < len(s.rollbackGs) - 1; i++ {
+			s.rollbackGs[i] = s.rollbackGs[i + 1]
+		}
+		s.rollbackGs[len(s.rollbackGs) - 1] = s.gs.clone()
 
 		// If next round
 		if s.roundOver() && !fin {
