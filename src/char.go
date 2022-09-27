@@ -1747,6 +1747,11 @@ func (c *Char) clone() (result *Char) {
 	// Pointers, slices, maps, functions, channels etc
 	result.ghv = *c.ghv.clone()
 
+	result.cmd = make([]CommandList, len(c.cmd))
+	for i := range c.cmd {
+		result.cmd[i] = *c.cmd[i].clone()
+	}
+
 	result.children = make([]int32, len(c.children))
 	copy(result.children, c.children)
 
@@ -1763,6 +1768,9 @@ func (c *Char) clone() (result *Char) {
 	
 	result.clipboardText = make([]string, len(c.clipboardText))
 	copy(result.clipboardText, c.clipboardText)
+
+	result.dialogue = make([]string, len(c.dialogue))
+	copy(result.dialogue, c.dialogue)
 
 	return
 }

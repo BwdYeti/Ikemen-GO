@@ -1462,6 +1462,18 @@ type cmdElem struct {
 	slash, greater, direction bool
 }
 
+func (ce *cmdElem) clone() (result *cmdElem) {
+	result = &cmdElem{}
+	*result = *ce
+	
+	// Manually copy references that shallow copy poorly, as needed
+	// Pointers, slices, maps, functions, channels etc
+	result.key = make([]CommandKey, len(ce.key))
+	copy(result.key, ce.key)
+
+	return
+}
+
 func (ce *cmdElem) IsDirection() bool {
 	//ここで~は方向コマンドとして返さない
 	return !ce.slash && len(ce.key) == 1 && ce.key[0] < CK_nBs && (ce.key[0] < CK_nB || ce.key[0] > CK_nUF)
@@ -1502,6 +1514,29 @@ type Command struct {
 	cmdi, tamei         int
 	time, cur           int32
 	buftime, curbuftime int32
+}
+
+func (c *Command) clone() (result *Command) {
+	result = &Command{}
+	*result = *c
+	
+	// Manually copy references that shallow copy poorly, as needed
+	// Pointers, slices, maps, functions, channels etc
+	result.hold = make([][]CommandKey, len(c.hold))
+	for i := range c.hold {
+		result.hold[i] = make([]CommandKey, len(c.hold[i]))
+		copy(result.hold[i], c.hold[i])
+	}
+	
+	result.held = make([]bool, len(c.held))
+	copy(result.held, c.held)
+
+	result.cmd = make([]cmdElem, len(c.cmd))
+	for i := range c.cmd {
+		result.cmd[i] = *c.cmd[i].clone()
+	}
+
+	return
 }
 
 func newCommand() *Command { return &Command{tamei: -1, time: 1, buftime: 1} }
@@ -1949,6 +1984,28 @@ type CommandList struct {
 	Commands          [][]Command
 	DefaultTime       int32
 	DefaultBufferTime int32
+}
+
+func (cl *CommandList) clone() (result *CommandList) {
+	result = &CommandList{}
+	*result = *cl
+	
+	// Manually copy references that shallow copy poorly, as needed
+	// Pointers, slices, maps, functions, channels etc
+	result.Names = make(map[string]int)
+	for k,v := range cl.Names {
+		result.Names[k] = v
+	}
+
+	result.Commands = make([][]Command, len(cl.Commands))
+	for i := range cl.Commands {
+		result.Commands[i] = make([]Command, len(cl.Commands[i]))
+		for j := range cl.Commands[i] {
+			result.Commands[i][j] = *cl.Commands[i][j].clone()
+		}
+	}
+
+	return
 }
 
 func NewCommandList(cb *CommandBuffer) *CommandList {
