@@ -1766,6 +1766,16 @@ func (c *Char) clone() (result *Char) {
 		copy(result.enemynear[i], c.enemynear[i])
 	}
 	
+	result.mapArray = make(map[string]float32)
+	for k,v := range c.mapArray {
+		result.mapArray[k] = v
+	}
+	
+	result.mapDefault = make(map[string]float32)
+	for k,v := range c.mapDefault {
+		result.mapDefault[k] = v
+	}
+	
 	result.clipboardText = make([]string, len(c.clipboardText))
 	copy(result.clipboardText, c.clipboardText)
 
