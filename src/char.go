@@ -2702,7 +2702,7 @@ func (c *Char) comboCount() int32 {
 	if c.teamside == -1 {
 		return 0
 	}
-	return sys.lifebar.co[c.teamside].combo
+	return sys.gs.lb.co[c.teamside].combo
 }
 func (c *Char) command(pn, i int) bool {
 	if !c.keyctrl[0] || c.cmd == nil {
@@ -3693,8 +3693,8 @@ func (c *Char) hitAdd(h int32) {
 				t.receivedHits += h
 				t.fakeReceivedHits += h
 				if c.teamside != -1 {
-					sys.lifebar.co[c.teamside].combo += h
-					sys.lifebar.co[c.teamside].fakeCombo += h
+					sys.gs.lb.co[c.teamside].combo += h
+					sys.gs.lb.co[c.teamside].fakeCombo += h
 				}
 			}
 		}
@@ -3704,11 +3704,11 @@ func (c *Char) hitAdd(h int32) {
 			if p != nil && c.teamside == ^i&1 {
 				if p.receivedHits != 0 || p.ss.moveType == MT_H {
 					p.receivedHits += h
-					sys.lifebar.co[c.teamside].combo += h
+					sys.gs.lb.co[c.teamside].combo += h
 				}
 				if p.fakeReceivedHits != 0 || p.ss.moveType == MT_H {
 					p.fakeReceivedHits += h
-					sys.lifebar.co[c.teamside].fakeCombo += h
+					sys.gs.lb.co[c.teamside].fakeCombo += h
 				}
 			}
 		}
@@ -6724,8 +6724,8 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 			getter.receivedHits += hd.numhits * hits
 			getter.fakeReceivedHits += hd.numhits * hits
 			if c.teamside != -1 {
-				sys.lifebar.co[c.teamside].combo += hd.numhits * hits
-				sys.lifebar.co[c.teamside].fakeCombo += hd.numhits * hits
+				sys.gs.lb.co[c.teamside].combo += hd.numhits * hits
+				sys.gs.lb.co[c.teamside].fakeCombo += hd.numhits * hits
 			}
 			//getter.getcombodmg += hd.hitdamage
 			if hitType > 0 && !proj && getter.sf(CSF_screenbound) &&

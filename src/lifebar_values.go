@@ -13,8 +13,24 @@ func newHealthBarValues() *HealthBarValues {
 	return &HealthBarValues{oldlife: 1, midlife: 1, midlifeMin: 1}
 }
 
+type LifeBarComboValues struct {
+	cur, old   int32
+	curd, oldd int32
+	curp, oldp float32
+	resttime   int32
+	counterX   float32
+	shaketime  int32
+	combo      int32
+	fakeCombo  int32
+}
+
+func newLifeBarComboValues() *LifeBarComboValues {
+	return &LifeBarComboValues{}
+}
+
 type LifebarValues struct {
 	hb [8][]HealthBarValues
+	co [2]LifeBarComboValues
 }
 
 func (lbv *LifebarValues) clone() (result *LifebarValues) {

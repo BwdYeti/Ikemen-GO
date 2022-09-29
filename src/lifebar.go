@@ -1321,14 +1321,6 @@ type LifeBarCombo struct {
 	hidespeed     float32
 	separator     string
 	places        int32
-	cur, old      int32
-	curd, oldd    int32
-	curp, oldp    float32
-	resttime      int32
-	counterX      float32
-	shaketime     int32
-	combo         int32
-	fakeCombo     int32
 }
 
 func newLifeBarCombo() *LifeBarCombo {
@@ -1371,69 +1363,69 @@ func readLifeBarCombo(pre string, is IniSection,
 	is.ReadI32("format.decimal.places", &co.places)
 	return co
 }
-func (co *LifeBarCombo) step(combo, fakeCombo, damage int32, percentage float32, dizzy bool) {
+func (co *LifeBarCombo) step(cov *LifeBarComboValues, combo, fakeCombo, damage int32, percentage float32, dizzy bool) {
 	co.bg.Action()
 	co.top.Action()
 	if fakeCombo > 0 {
-		fakeCombo = co.fakeCombo
+		fakeCombo = cov.fakeCombo
 	} else {
-		co.fakeCombo = 0
+		cov.fakeCombo = 0
 	}
 	if combo <= 0 {
-		co.combo = 0
+		cov.combo = 0
 	}
 
-	if co.resttime > 0 {
-		co.counterX -= co.counterX / co.showspeed
+	if cov.resttime > 0 {
+		cov.counterX -= cov.counterX / co.showspeed
 	} else if fakeCombo < 2 {
-		co.counterX -= sys.lifebar.fnt_scale * co.hidespeed * float32(sys.lifebarLocalcoord[0]) / 320
-		if co.counterX < co.start_x*2 {
-			co.counterX = co.start_x * 2
+		cov.counterX -= sys.lifebar.fnt_scale * co.hidespeed * float32(sys.lifebarLocalcoord[0]) / 320
+		if cov.counterX < co.start_x*2 {
+			cov.counterX = co.start_x * 2
 		}
 	}
-	if co.shaketime > 0 {
-		co.shaketime--
+	if cov.shaketime > 0 {
+		cov.shaketime--
 	}
-	if AbsF(co.counterX) < 1 && !dizzy {
-		co.resttime--
+	if AbsF(cov.counterX) < 1 && !dizzy {
+		cov.resttime--
 	}
 	if fakeCombo >= 2 {
-		if co.old != fakeCombo {
-			co.cur = fakeCombo
-			co.resttime = co.displaytime
+		if cov.old != fakeCombo {
+			cov.cur = fakeCombo
+			cov.resttime = co.displaytime
 			if co.counter_shake {
-				co.shaketime = co.counter_time
+				cov.shaketime = co.counter_time
 			}
 		}
-		if co.oldd != damage {
-			co.curd = damage
+		if cov.oldd != damage {
+			cov.curd = damage
 		}
-		if co.oldp != percentage {
-			co.curp = percentage
+		if cov.oldp != percentage {
+			cov.curp = percentage
 		}
 	}
-	co.old = fakeCombo
-	co.oldd = damage
-	co.oldp = percentage
+	cov.old = fakeCombo
+	cov.oldd = damage
+	cov.oldp = percentage
 }
-func (co *LifeBarCombo) reset() {
+func (co *LifeBarCombo) reset(cov *LifeBarComboValues) {
 	co.bg.Reset()
 	co.top.Reset()
-	co.cur, co.old, co.curd, co.oldd, co.curp, co.oldp, co.resttime = 0, 0, 0, 0, 0, 0, 0
-	co.combo = 0
-	co.fakeCombo = 0
-	co.counterX = co.start_x * 2
-	co.shaketime = 0
+	cov.cur, cov.old, cov.curd, cov.oldd, cov.curp, cov.oldp, cov.resttime = 0, 0, 0, 0, 0, 0, 0
+	cov.combo = 0
+	cov.fakeCombo = 0
+	cov.counterX = co.start_x * 2
+	cov.shaketime = 0
 }
-func (co *LifeBarCombo) draw(layerno int16, f []*Fnt, side int) {
-	if co.resttime <= 0 && co.counterX == co.start_x*2 {
+func (co *LifeBarCombo) draw(layerno int16, cov *LifeBarComboValues, f []*Fnt, side int) {
+	if cov.resttime <= 0 && cov.counterX == co.start_x*2 {
 		return
 	}
-	counter := strings.Replace(co.counter.text, "%i", fmt.Sprintf("%v", co.cur), 1)
+	counter := strings.Replace(co.counter.text, "%i", fmt.Sprintf("%v", cov.cur), 1)
 	x := float32(co.pos[0])
 	if side == 0 {
 		if co.start_x <= 0 {
-			x += co.counterX
+			x += cov.counterX
 		}
 		if co.counter.font[0] >= 0 && int(co.counter.font[0]) < len(f) && f[co.counter.font[0]] != nil {
 			x += float32(f[co.counter.font[0]].TextWidth(counter, co.counter.font[1])) *
@@ -1441,16 +1433,16 @@ func (co *LifeBarCombo) draw(layerno int16, f []*Fnt, side int) {
 		}
 	} else {
 		if co.start_x <= 0 {
-			x -= co.counterX
+			x -= cov.counterX
 		}
 	}
 	co.bg.Draw(x+sys.lifebarOffsetX, float32(co.pos[1]), layerno, sys.lifebarScale)
 	var length float32
 	if co.text.font[0] >= 0 && int(co.text.font[0]) < len(f) && f[co.text.font[0]] != nil {
-		text := strings.Replace(co.text.text, "%i", fmt.Sprintf("%v", co.cur), 1)
-		text = strings.Replace(text, "%d", fmt.Sprintf("%v", co.curd), 1)
+		text := strings.Replace(co.text.text, "%i", fmt.Sprintf("%v", cov.cur), 1)
+		text = strings.Replace(text, "%d", fmt.Sprintf("%v", cov.curd), 1)
 		//split float value, round to decimal place
-		s := strings.Split(fmt.Sprintf("%.[2]*[1]f", co.curp, co.places), ".")
+		s := strings.Split(fmt.Sprintf("%.[2]*[1]f", cov.curp, co.places), ".")
 		//decimal separator
 		if co.places > 0 {
 			if len(s) > 1 {
@@ -1477,8 +1469,8 @@ func (co *LifeBarCombo) draw(layerno int16, f []*Fnt, side int) {
 		if side == 0 {
 			length = float32(f[co.counter.font[0]].TextWidth(counter, co.counter.font[1])) * co.counter.lay.scale[0] * sys.lifebar.fnt_scale
 		}
-		z := 1 + float32(co.shaketime)*co.counter_mult*
-			float32(math.Sin(float64(co.shaketime)*(math.Pi/2.5)))
+		z := 1 + float32(cov.shaketime)*co.counter_mult*
+			float32(math.Sin(float64(cov.shaketime)*(math.Pi/2.5)))
 		co.counter.lay.DrawText((x-length+sys.lifebarOffsetX)/z, float32(co.pos[1])/z, z*sys.lifebarScale, layerno,
 			counter, f[co.counter.font[0]], co.counter.font[1], co.counter.font[2], co.counter.palfx, co.counter.frgba)
 	}
@@ -3356,6 +3348,7 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 			}
 		case "combo":
 			if l.co[0] == nil {
+				sys.gs.lb.co[0] = *newLifeBarComboValues()
 				if _, ok := is["team1.pos"]; ok {
 					l.co[0] = readLifeBarCombo("team1.", is, l.sff, l.at, l.fnt[:], 0)
 				} else {
@@ -3363,6 +3356,7 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 				}
 			}
 			if l.co[1] == nil {
+				sys.gs.lb.co[1] = *newLifeBarComboValues()
 				if _, ok := is["team2.pos"]; ok {
 					l.co[1] = readLifeBarCombo("team2.", is, l.sff, l.at, l.fnt[:], 1)
 				} else {
@@ -3614,7 +3608,7 @@ func (l *Lifebar) step() {
 		}
 	}
 	for i := range l.co {
-		l.co[i].step(cb[i], fcb[i], cd[i], cp[i], st[i])
+		l.co[i].step(&sys.gs.lb.co[i], cb[i], fcb[i], cd[i], cp[i], st[i])
 	}
 	//LifeBarAction
 	for i := range l.ac {
@@ -3730,7 +3724,7 @@ func (l *Lifebar) reset() {
 	}
 	l.ti.reset()
 	for i := range l.co {
-		l.co[i].reset()
+		l.co[i].reset(&sys.gs.lb.co[i])
 	}
 	for i := range l.ac {
 		l.ac[i].reset(l.order[i][0])
@@ -3895,7 +3889,7 @@ func (l *Lifebar) draw(layerno int16) {
 		}
 		//LifeBarCombo
 		for i := range l.co {
-			l.co[i].draw(layerno, l.fnt[:], i)
+			l.co[i].draw(layerno, &sys.gs.lb.co[i], l.fnt[:], i)
 		}
 		//LifeBarAction
 		for i := range l.ac {
