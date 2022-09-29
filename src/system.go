@@ -105,6 +105,7 @@ type GameState struct {
 	randseed                int32
 	time                    int32
 	gameTime                int32
+	lb                      LifebarValues
 	aiInput                 [MaxSimul*2 + MaxAttachedChar]AiInput
 	charArray               []Char
 	chars                   [MaxSimul*2 + MaxAttachedChar][]int
@@ -673,7 +674,9 @@ func (s *System) loaderReset() {
 }
 func (s *System) loadStart() {
 	// Reset game state
+	lbv := &s.gs.lb
 	s.gs = &GameState{}
+	s.gs.lb = *lbv
 
 	s.loaderReset()
 	s.loader.runTread()

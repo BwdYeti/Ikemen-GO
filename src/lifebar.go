@@ -152,22 +152,15 @@ type HealthBar struct {
 	warn       AnimLayout
 	warn_range [2]int32
 	value      LbText
-	toplife    float32
-	oldlife    float32
-	midlife    float32
-	midlifeMin float32
-	mlifetime  int32
 	mid_shift  bool
 	mid_freeze bool
 	mid_delay  int32
 	mid_mult   float32
 	mid_steps  float32
-	gethit     bool
 }
 
 func newHealthBar() *HealthBar {
-	return &HealthBar{oldlife: 1, midlife: 1, midlifeMin: 1,
-		red: make(map[int32]*AnimLayout), front: make(map[float32]*AnimLayout),
+	return &HealthBar{red: make(map[int32]*AnimLayout), front: make(map[float32]*AnimLayout),
 		mid_freeze: true, mid_delay: 30, mid_mult: 1.0, mid_steps: 8.0}
 }
 func readHealthBar(pre string, is IniSection,
@@ -220,52 +213,52 @@ func readHealthBar(pre string, is IniSection,
 	hb.warn = *ReadAnimLayout(pre+"warn.", is, sff, at, 0)
 	return hb
 }
-func (hb *HealthBar) step(ref int, hbr *HealthBar) {
+func (hb *HealthBar) step(ref int, hbr *HealthBar, hbv *HealthBarValues) {
 	p := sys.getChar(ref, 0)
 	var life float32 = float32(p.life) / float32(p.lifeMax)
 	//redlife := (float32(p.life) + float32(p.redLife)) / float32(p.lifeMax)
 	var redVal int32 = p.redLife
 	var getHit bool = (p.fakeReceivedHits != 0 || p.ss.moveType == MT_H) && !p.scf(SCF_over)
 
-	if hbr.toplife > life {
-		hbr.toplife += (life - hbr.toplife) / 2
+	if hbv.toplife > life {
+		hbv.toplife += (life - hbv.toplife) / 2
 	} else {
-		hbr.toplife = life
+		hbv.toplife = life
 	}
 	hb.shift.anim.srcAlpha = int16(255 * (1 - life))
 	hb.shift.anim.dstAlpha = int16(255 * life)
-	if !hb.mid_freeze && getHit && !hb.gethit && len(hb.mid.anim.frames) > 0 {
-		hbr.mlifetime = hb.mid_delay
-		hbr.midlife = hbr.oldlife
-		hbr.midlifeMin = hbr.oldlife
+	if !hb.mid_freeze && getHit && !hbv.gethit && len(hb.mid.anim.frames) > 0 {
+		hbv.mlifetime = hb.mid_delay
+		hbv.midlife = hbv.oldlife
+		hbv.midlifeMin = hbv.oldlife
 	}
-	hb.gethit = getHit
+	hbv.gethit = getHit
 	if hb.mid_freeze && getHit && len(hb.mid.anim.frames) > 0 {
-		if hbr.mlifetime < hb.mid_delay {
-			hbr.mlifetime = hb.mid_delay
-			hbr.midlife = hbr.oldlife
-			hbr.midlifeMin = hbr.oldlife
+		if hbv.mlifetime < hb.mid_delay {
+			hbv.mlifetime = hb.mid_delay
+			hbv.midlife = hbv.oldlife
+			hbv.midlifeMin = hbv.oldlife
 		}
 	} else {
-		if hbr.mlifetime > 0 {
-			hbr.mlifetime--
+		if hbv.mlifetime > 0 {
+			hbv.mlifetime--
 		}
-		if len(hb.mid.anim.frames) > 0 && hbr.mlifetime <= 0 && life < hbr.midlifeMin {
-			hbr.midlifeMin += (life - hbr.midlifeMin) * (1 / (12 - (life-hbr.midlifeMin)*144)) * hb.mid_mult
-			if hbr.midlifeMin < life {
-				hbr.midlifeMin = life
+		if len(hb.mid.anim.frames) > 0 && hbv.mlifetime <= 0 && life < hbv.midlifeMin {
+			hbv.midlifeMin += (life - hbv.midlifeMin) * (1 / (12 - (life-hbv.midlifeMin)*144)) * hb.mid_mult
+			if hbv.midlifeMin < life {
+				hbv.midlifeMin = life
 			}
 		} else {
-			hbr.midlifeMin = life
+			hbv.midlifeMin = life
 		}
-		if (len(hb.mid.anim.frames) == 0 || hbr.mlifetime <= 0) && hbr.midlife > hbr.midlifeMin {
-			hbr.midlife += (hbr.midlifeMin - hbr.midlife) / hb.mid_steps
+		if (len(hb.mid.anim.frames) == 0 || hbv.mlifetime <= 0) && hbv.midlife > hbv.midlifeMin {
+			hbv.midlife += (hbv.midlifeMin - hbv.midlife) / hb.mid_steps
 		}
-		hbr.oldlife = life
+		hbv.oldlife = life
 	}
-	mlmin := MaxF(hbr.midlifeMin, life)
-	if hbr.midlife < mlmin {
-		hbr.midlife += (mlmin - hbr.midlife) / 2
+	mlmin := MaxF(hbv.midlifeMin, life)
+	if hbv.midlife < mlmin {
+		hbv.midlife += (mlmin - hbv.midlife) / 2
 	}
 	hb.bg0.Action()
 	hb.bg1.Action()
@@ -311,7 +304,7 @@ func (hb *HealthBar) bgDraw(layerno int16) {
 	hb.bg1.Draw(float32(hb.pos[0])+sys.lifebarOffsetX, float32(hb.pos[1]), layerno, sys.lifebarScale)
 	hb.bg2.Draw(float32(hb.pos[0])+sys.lifebarOffsetX, float32(hb.pos[1]), layerno, sys.lifebarScale)
 }
-func (hb *HealthBar) draw(layerno int16, ref int, hbr *HealthBar, f []*Fnt) {
+func (hb *HealthBar) draw(layerno int16, ref int, hbr *HealthBar, hbv *HealthBarValues, f []*Fnt) {
 	p := sys.getChar(ref, 0)
 	life := float32(p.life) / float32(p.lifeMax)
 	redlife := (float32(p.life) + float32(p.redLife)) / float32(p.lifeMax)
@@ -328,10 +321,10 @@ func (hb *HealthBar) draw(layerno int16, ref int, hbr *HealthBar, f []*Fnt) {
 		}
 		return
 	}
-	if len(hb.mid.anim.frames) == 0 || life > hbr.midlife {
-		life = hbr.midlife
+	if len(hb.mid.anim.frames) == 0 || life > hbv.midlife {
+		life = hbv.midlife
 	}
-	lr, mr, rr := width(hbr.toplife), width(hbr.midlife), width(redlife)
+	lr, mr, rr := width(hbv.toplife), width(hbv.midlife), width(redlife)
 	if hb.range_x[0] < hb.range_x[1] {
 		mr[0] += lr[2]
 		//rr[0] += lr[2]
@@ -2931,6 +2924,11 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Initialize Lifebar Values in Game State
+	sys.gs.lb.hb = [...][]HealthBarValues{make([]HealthBarValues, 2), make([]HealthBarValues, 8),
+		make([]HealthBarValues, 2), make([]HealthBarValues, 8), make([]HealthBarValues, 6),
+		make([]HealthBarValues, 8), make([]HealthBarValues, 6), make([]HealthBarValues, 8)}
+
 	l := &Lifebar{sff: &Sff{}, fsff: &Sff{}, snd: &Snd{},
 		hb: [...][]*HealthBar{make([]*HealthBar, 2), make([]*HealthBar, 8),
 			make([]*HealthBar, 2), make([]*HealthBar, 8), make([]*HealthBar, 6),
@@ -3068,9 +3066,11 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 			is.ReadF32("scale", &l.fx_scale)
 		case "lifebar":
 			if l.hb[0][0] == nil {
+				sys.gs.lb.hb[0][0] = *newHealthBarValues()
 				l.hb[0][0] = readHealthBar("p1.", is, l.sff, l.at, l.fnt[:])
 			}
 			if l.hb[0][1] == nil {
+				sys.gs.lb.hb[0][1] = *newHealthBarValues()
 				l.hb[0][1] = readHealthBar("p2.", is, l.sff, l.at, l.fnt[:])
 			}
 		case "powerbar":
@@ -3113,9 +3113,11 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 			switch {
 			case len(subname) >= 7 && subname[:7] == "lifebar":
 				if l.hb[2][0] == nil {
+					sys.gs.lb.hb[2][0] = *newHealthBarValues()
 					l.hb[2][0] = readHealthBar("p1.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.hb[2][1] == nil {
+					sys.gs.lb.hb[2][1] = *newHealthBarValues()
 					l.hb[2][1] = readHealthBar("p2.", is, l.sff, l.at, l.fnt[:])
 				}
 			case len(subname) >= 8 && subname[:8] == "powerbar":
@@ -3172,28 +3174,36 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 			switch {
 			case len(subname) >= 7 && subname[:7] == "lifebar":
 				if l.hb[i][0] == nil {
+					sys.gs.lb.hb[i][0] = *newHealthBarValues()
 					l.hb[i][0] = readHealthBar("p1.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.hb[i][1] == nil {
+					sys.gs.lb.hb[i][1] = *newHealthBarValues()
 					l.hb[i][1] = readHealthBar("p2.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.hb[i][2] == nil {
+					sys.gs.lb.hb[i][2] = *newHealthBarValues()
 					l.hb[i][2] = readHealthBar("p3.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.hb[i][3] == nil {
+					sys.gs.lb.hb[i][3] = *newHealthBarValues()
 					l.hb[i][3] = readHealthBar("p4.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.hb[i][4] == nil {
+					sys.gs.lb.hb[i][4] = *newHealthBarValues()
 					l.hb[i][4] = readHealthBar("p5.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.hb[i][5] == nil {
+					sys.gs.lb.hb[i][5] = *newHealthBarValues()
 					l.hb[i][5] = readHealthBar("p6.", is, l.sff, l.at, l.fnt[:])
 				}
 				if i != 4 && i != 6 {
 					if l.hb[i][6] == nil {
+						sys.gs.lb.hb[i][6] = *newHealthBarValues()
 						l.hb[i][6] = readHealthBar("p7.", is, l.sff, l.at, l.fnt[:])
 					}
 					if l.hb[i][7] == nil {
+						sys.gs.lb.hb[i][7] = *newHealthBarValues()
 						l.hb[i][7] = readHealthBar("p8.", is, l.sff, l.at, l.fnt[:])
 					}
 				}
@@ -3564,7 +3574,7 @@ func (l *Lifebar) step() {
 	for ti := range sys.tmode {
 		for i, v := range l.order[ti] {
 			//HealthBar
-			l.hb[l.ref[ti]][i*2+ti].step(v, l.hb[l.ref[ti]][v])
+			l.hb[l.ref[ti]][i*2+ti].step(v, l.hb[l.ref[ti]][v], &sys.gs.lb.hb[l.ref[ti]][v])
 			//PowerBar
 			l.pb[l.ref[ti]][i*2+ti].step(v, l.pb[l.ref[ti]][v], l.snd)
 			//GuardBar
@@ -3759,7 +3769,7 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			for ti := range sys.tmode {
 				for i, v := range l.order[ti] {
-					l.hb[l.ref[ti]][i*2+ti].draw(layerno, v, l.hb[l.ref[ti]][v], l.fnt[:])
+					l.hb[l.ref[ti]][i*2+ti].draw(layerno, v, l.hb[l.ref[ti]][v], &sys.gs.lb.hb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//PowerBar
