@@ -1501,6 +1501,18 @@ type LbMsg struct {
 	del      bool
 }
 
+func (msg *LbMsg) clone() (result *LbMsg) {
+	result = &LbMsg{}
+	*result = *msg
+
+	// Manually copy references that shallow copy poorly, as needed
+	// Pointers, slices, maps, functions, channels etc
+	result.bg = *msg.bg.clone()
+	result.front = *msg.front.clone()
+
+	return
+}
+
 func newLbMsg(text string, time int32, side int) *LbMsg {
 	return &LbMsg{resttime: time, counterX: sys.lifebar.ac[side].start_x * 2, text: text}
 }

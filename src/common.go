@@ -657,6 +657,17 @@ type AnimLayout struct {
 	palfx *PalFX
 }
 
+func (al *AnimLayout) clone() (result *AnimLayout) {
+	result = &AnimLayout{}
+	*result = *al
+
+	// Manually copy references that shallow copy poorly, as needed
+	// Pointers, slices, maps, functions, channels etc
+	result.palfx = al.palfx.clone()
+
+	return
+}
+
 func newAnimLayout(sff *Sff, ln int16) *AnimLayout {
 	return &AnimLayout{anim: *newAnimation(sff), lay: *newLayout(ln), palfx: newPalFX()}
 }
