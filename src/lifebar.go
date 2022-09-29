@@ -1509,7 +1509,6 @@ func removeLbMsg(array []*LbMsg, index int) []*LbMsg {
 }
 
 type LifeBarAction struct {
-	oldleader   int
 	pos         [2]int32
 	spacing     [2]int32
 	start_x     float32
@@ -1517,7 +1516,6 @@ type LifeBarAction struct {
 	displaytime int32
 	showspeed   float32
 	hidespeed   float32
-	messages    []*LbMsg
 	is          IniSection
 }
 
@@ -1540,11 +1538,11 @@ func readLifeBarAction(pre string, is IniSection, f []*Fnt) *LifeBarAction {
 	is.ReadF32(pre+"hidespeed", &ac.hidespeed)
 	return ac
 }
-func (ac *LifeBarAction) step(leader int) {
-	if ac.oldleader != leader {
-		ac.oldleader = leader
+func (ac *LifeBarAction) step(leader int, acv *LifeBarActionValues) {
+	if acv.oldleader != leader {
+		acv.oldleader = leader
 	}
-	for _, v := range ac.messages {
+	for _, v := range acv.messages {
 		v.bg.Action()
 		v.front.Action()
 		if v.resttime > 0 {
@@ -1559,16 +1557,16 @@ func (ac *LifeBarAction) step(leader int) {
 			v.resttime--
 		}
 	}
-	if len(ac.messages) > 0 && ac.messages[len(ac.messages)-1].del {
-		ac.messages = removeLbMsg(ac.messages, len(ac.messages)-1)
+	if len(acv.messages) > 0 && acv.messages[len(acv.messages)-1].del {
+		acv.messages = removeLbMsg(acv.messages, len(acv.messages)-1)
 	}
 }
-func (ac *LifeBarAction) reset(leader int) {
-	ac.oldleader = leader
-	ac.messages = []*LbMsg{}
+func (ac *LifeBarAction) reset(leader int, acv *LifeBarActionValues) {
+	acv.oldleader = leader
+	acv.messages = []*LbMsg{}
 }
-func (ac *LifeBarAction) draw(layerno int16, f []*Fnt, side int) {
-	for k, v := range ac.messages {
+func (ac *LifeBarAction) draw(layerno int16, acv *LifeBarActionValues, f []*Fnt, side int) {
+	for k, v := range acv.messages {
 		if v.resttime <= 0 && v.counterX == ac.start_x*2 {
 			continue
 		}
@@ -3365,9 +3363,11 @@ func loadLifebar(deffile string) (*Lifebar, error) {
 			}
 		case "action":
 			if l.ac[0] == nil {
+				sys.gs.lb.ac[0] = *newLifeBarActionValues()
 				l.ac[0] = readLifeBarAction("team1.", is, l.fnt[:])
 			}
 			if l.ac[1] == nil {
+				sys.gs.lb.ac[1] = *newLifeBarActionValues()
 				l.ac[1] = readLifeBarAction("team2.", is, l.fnt[:])
 			}
 		case "round":
@@ -3612,7 +3612,7 @@ func (l *Lifebar) step() {
 	}
 	//LifeBarAction
 	for i := range l.ac {
-		l.ac[i].step(l.order[i][0])
+		l.ac[i].step(l.order[i][0], &sys.gs.lb.ac[i])
 	}
 	//LifeBarRatio
 	for ti, tm := range sys.tmode {
@@ -3727,7 +3727,7 @@ func (l *Lifebar) reset() {
 		l.co[i].reset(&sys.gs.lb.co[i])
 	}
 	for i := range l.ac {
-		l.ac[i].reset(l.order[i][0])
+		l.ac[i].reset(l.order[i][0], &sys.gs.lb.ac[i])
 	}
 	l.ro.reset()
 	for i := range l.ra {
@@ -3893,7 +3893,7 @@ func (l *Lifebar) draw(layerno int16) {
 		}
 		//LifeBarAction
 		for i := range l.ac {
-			l.ac[i].draw(layerno, l.fnt[:], i)
+			l.ac[i].draw(layerno, &sys.gs.lb.ac[i], l.fnt[:], i)
 		}
 		//LifeBarMode
 		if _, ok := l.mo[sys.gameMode]; ok {

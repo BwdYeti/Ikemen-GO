@@ -28,9 +28,33 @@ func newLifeBarComboValues() *LifeBarComboValues {
 	return &LifeBarComboValues{}
 }
 
+type LifeBarActionValues struct {
+	oldleader int
+	messages  []*LbMsg
+}
+
+func newLifeBarActionValues() *LifeBarActionValues {
+	return &LifeBarActionValues{}
+}
+
+func (acv *LifeBarActionValues) clone() (result *LifeBarActionValues) {
+	result = &LifeBarActionValues{}
+	*result = *acv
+
+	// Manually copy references that shallow copy poorly, as needed
+	// Pointers, slices, maps, functions, channels etc
+	result.messages = make([]*LbMsg, len(acv.messages))
+	for i := range acv.messages {
+		result.messages[i] = acv.messages[i].clone()
+	}
+
+	return
+}
+
 type LifebarValues struct {
 	hb [8][]HealthBarValues
 	co [2]LifeBarComboValues
+	ac [2]LifeBarActionValues
 }
 
 func (lbv *LifebarValues) clone() (result *LifebarValues) {
@@ -42,6 +66,10 @@ func (lbv *LifebarValues) clone() (result *LifebarValues) {
 	for i := range lbv.hb {
 		result.hb[i] = make([]HealthBarValues, len(lbv.hb[i]))
 		copy(result.hb[i], lbv.hb[i])
+	}
+
+	for i := range lbv.ac {
+		result.ac[i] = *lbv.ac[i].clone()
 	}
 
 	return

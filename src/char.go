@@ -4854,9 +4854,9 @@ func (c *Char) appendLifebarAction(text string, snd, spr [2]int32, anim, time in
 	}
 	index := 0
 	if !top {
-		for k, v := range sys.lifebar.ac[c.teamside].messages {
+		for k, v := range sys.gs.lb.ac[c.teamside].messages {
 			if v.del {
-				sys.lifebar.ac[c.teamside].messages = removeLbMsg(sys.lifebar.ac[c.teamside].messages, k)
+				sys.gs.lb.ac[c.teamside].messages = removeLbMsg(sys.gs.lb.ac[c.teamside].messages, k)
 				break
 			}
 			index++
@@ -4877,7 +4877,7 @@ func (c *Char) appendLifebarAction(text string, snd, spr [2]int32, anim, time in
 		msg.bg = *ReadAnimLayout(fmt.Sprintf("team%v.bg.", c.teamside+1), sys.lifebar.ac[c.teamside].is, sys.lifebar.sff, sys.lifebar.at, 2)
 		msg.front = *ReadAnimLayout(fmt.Sprintf("team%v.front.", c.teamside+1), sys.lifebar.ac[c.teamside].is, sys.lifebar.sff, sys.lifebar.at, 2)
 	}
-	sys.lifebar.ac[c.teamside].messages = insertLbMsg(sys.lifebar.ac[c.teamside].messages, msg, index)
+	sys.gs.lb.ac[c.teamside].messages = insertLbMsg(sys.gs.lb.ac[c.teamside].messages, msg, index)
 }
 
 func (c *Char) appendDialogue(s string, reset bool) {
