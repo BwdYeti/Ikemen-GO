@@ -29,7 +29,7 @@ end
 --save configuration
 function options.f_saveCfg(reload)
 	--Data saving to config.json
-	main.f_fileWrite(main.flags['-config'], json.encode(config, {indent = true}))
+	main.f_fileWrite(main.flags['-config'], json.encode(config, {indent = 2}))
 	--Reload game if needed
 	if reload then
 		main.f_warning(main.f_extractText(motif.warning_info.text_reload_text), motif.optionbgdef)
@@ -60,6 +60,8 @@ local function f_externalShaderName()
 	return motif.option_info.menu_valuename_disabled
 end
 
+-- Associative elements table storing functions controlling behaviour of each
+-- option screen item. Can be appended via external module.
 options.t_itemname = {
 	--Back
 	['back'] = function(t, item, cursorPosY, moveTxt)
@@ -78,7 +80,7 @@ options.t_itemname = {
 				txt_textinput,
 				overlay_textinput,
 				motif.option_info.textinput_offset[2],
-				main.f_ySpacing(motif.option_info, 'textinput_font'),
+				main.f_ySpacing(motif.option_info, 'textinput'),
 				motif.optionbgdef
 			)
 			if tonumber(port) ~= nil then
@@ -98,16 +100,20 @@ options.t_itemname = {
 		if main.f_input(main.t_players, {'$F', '$B', 'pal', 's'}) then
 			sndPlay(motif.files.snd_data, motif.option_info.cursor_done_snd[1], motif.option_info.cursor_done_snd[2])
 			config.AIRamping = true
-			config.AIRandomColor = true
+			config.AIRandomColor = false
+			config.AISurvivalColor = true
 			config.AudioDucking = false
+			--config.AudioSampleRate = 44100
 			config.AutoGuard = false
+			--config.BackgroundLoading = false
 			config.BarGuard = false
 			config.BarRedLife = true
 			config.BarStun = false
-			config.Borderless = false
-			config.ComboExtraFrameWindow = 1
+			--config.Borderless = false
+			--config.ComboExtraFrameWindow = 0
 			--config.CommonAir = "data/common.air"
 			--config.CommonCmd = "data/common.cmd"
+			--config.CommonConst = "data/common.const"
 			--config.CommonLua = {
 			--	"loop()"
 			--}
@@ -115,82 +121,97 @@ options.t_itemname = {
 			--	"data/action.zss",
 			--	"data/dizzy.zss",
 			--	"data/guardbreak.zss",
-			--	"data/rank.zss",
 			--	"data/score.zss",
-			--	"data/tag.zss"
+			--	"data/tag.zss",
+			--	"data/training.zss"
 			--}
 			--config.ControllerStickSensitivity = 0.4
 			config.Credits = 10
 			--config.DebugClipboardRows = 2
+			--config.DebugClsnDarken = true
 			--config.DebugConsoleRows = 15
-			--config.DebugFont = "font/f-4x6.def"
+			--config.DebugFont = "font/debug.def"
 			--config.DebugFontScale = 1
 			config.DebugKeys = true
-			config.Difficulty = 8
-			config.EscOpensMenu = true
+			config.DebugMode = true
+			config.Difficulty = 5
+			--config.EscOpensMenu = true
 			config.ExternalShaders = {}
-			--config.FontShaderVer = "150 core"
-			config.ForceStageZoomin = 0
-			config.ForceStageZoomout = 0
+			--config.FirstRun = false
+			--config.FontShaderVer = 120
+			--config.ForceStageZoomin = 0
+			--config.ForceStageZoomout = 0
+			--config.Framerate = 60
 			config.Fullscreen = false
+			--config.FullscreenRefreshRate = 60
+			--config.FullscreenWidth = -1
+			--config.FullscreenHeight = -1
 			config.GameWidth = 640
 			config.GameHeight = 480
-			config.GameSpeed = 100
+			config.GameFramerate = 60
 			--config.IP = {}
-			config.LifebarFontScale = 1
 			config.LifeMul = 100
 			config.ListenPort = "7500"
 			config.LoseSimul = true
 			config.LoseTag = false
-			config.MaxDrawGames = -2
+			config.MaxAfterImage = 128
+			--config.MaxBgmVolume = 100
+			config.MaxDrawGames = -2 -- -2: match.maxdrawgames; -1: match.wins; >= 0: overriding fight.def parameters
+			config.MaxExplod = 512
 			config.MaxHelper = 56
 			config.MaxPlayerProjectile = 256
-			config.MaxExplod = 512
-			config.MaxAfterImage = 128
 			--config.Modules = {}
 			--config.Motif = "data/system.def"			
 			config.MSAA = false
 			config.NumSimul = {2, 4}
 			config.NumTag = {2, 4}
 			config.NumTurns = {2, 4}
+			config.PanningRange = 30
 			config.Players = 4
-			config.PngSpriteFilter = true
+			--config.PngSpriteFilter = true
 			config.PostProcessingShader = 0
 			config.QuickContinue = false
-			config.RatioLife = {0.80, 1.0, 1.17, 1.40}
 			config.RatioAttack = {0.82, 1.0, 1.17, 1.30}
+			config.RatioLife = {0.80, 1.0, 1.17, 1.40}
 			config.RatioRecoveryBase = 0
 			config.RatioRecoveryBonus = 20
-			config.RoundsNumSingle = 2
 			config.RoundsNumSimul = 2
+			config.RoundsNumSingle = 2
 			config.RoundsNumTag = 2
 			config.RoundTime = 99
-			config.StartStage = "stages/stage0-720.def"
+			--config.ScreenshotFolder = ""
+			--config.StartStage = "stages/stage0-720.def"
+			config.StereoEffects = true
 			--config.System = "external/script/main.lua"
 			config.Team1VS2Life = 100
 			config.TeamDuplicates = true
 			config.TeamLifeShare = false
 			config.TeamPowerShare = true
-			--config.TrainingChar = "chars/training/training.def"
+			--config.TrainingChar = ""
 			config.TurnsRecoveryBase = 0
 			config.TurnsRecoveryBonus = 20
 			config.VolumeBgm = 80
 			config.VolumeMaster = 80
 			config.VolumeSfx = 80
 			config.VRetrace = 1
+			--config.WindowCentered = true
 			--config.WindowIcon = {"external/icons/IkemenCylia.png"}
 			--config.WindowTitle = "Ikemen GO"
 			--config.XinputTriggerSensitivity = 0
-			config.ZoomActive = true
-			config.ZoomDelay = false
-			config.ZoomSpeed = 1
+			--config.ZoomActive = true
+			--config.ZoomDelay = false
+			--config.ZoomSpeed = 1
 			loadLifebar(motif.files.fight)
-			main.timeFramesPerCount = getTimeFramesPerCount()
+			main.timeFramesPerCount = framespercount()
 			main.f_updateRoundsNum()
-			options.f_resetVardisplay(options.menu)
+			main.f_setPlayers(config.Players, true)
+			for _, v in ipairs(options.t_vardisplayPointers) do
+				v.vardisplay = options.f_vardisplay(v.itemname)
+			end
 			setAllowDebugKeys(config.DebugKeys)
+			setAllowDebugMode(config.DebugMode)
 			setAudioDucking(config.AudioDucking)
-			setGameSpeed(config.GameSpeed / 100)
+			setGameSpeed(config.GameFramerate)
 			setLifeShare(1, config.TeamLifeShare)
 			setLifeShare(2, config.TeamLifeShare)
 			setLifeMul(config.LifeMul / 100)
@@ -201,16 +222,18 @@ options.t_itemname = {
 			setMaxExplod(config.MaxExplod)
 			setMaxHelper(config.MaxHelper)
 			setMaxPlayerProjectile(config.MaxPlayerProjectile)
+			setPanningRange(config.PanningRange)
 			setPowerShare(1, config.TeamPowerShare)
 			setPowerShare(2, config.TeamPowerShare)
+			setStereoEffects(config.StereoEffects)
 			setTeam1VS2Life(config.Team1VS2Life / 100)
 			setVolumeBgm(config.VolumeBgm)
 			setVolumeMaster(config.VolumeMaster)
 			setVolumeSfx(config.VolumeSfx)
-			setZoom(config.ZoomActive)
-			setZoomMax(config.ForceStageZoomin)
-			setZoomMin(config.ForceStageZoomout)
-			setZoomSpeed(config.ZoomSpeed)
+			--setZoom(config.ZoomActive)
+			--setZoomMax(config.ForceStageZoomin)
+			--setZoomMin(config.ForceStageZoomout)
+			--setZoomSpeed(config.ZoomSpeed)
 			toggleFullscreen(config.Fullscreen)
 			toggleVsync(config.VRetrace)
 			modified = true
@@ -282,19 +305,19 @@ options.t_itemname = {
 		end
 		return true
 	end,
-	--Game Speed
+	-- Game FPS (Game Speed)
 	['gamespeed'] = function(t, item, cursorPosY, moveTxt)
-		if main.f_input(main.t_players, {'$F'}) and config.GameSpeed < 200 then
+		if main.f_input(main.t_players, {'$F'}) and config.GameFramerate < 600 then
 			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
-			config.GameSpeed = config.GameSpeed + 1
-			setGameSpeed(config.GameSpeed / 100)
-			t.items[item].vardisplay = config.GameSpeed .. '%'
+			config.GameFramerate = config.GameFramerate + 1
+			setGameSpeed(config.GameFramerate)
+			t.items[item].vardisplay = config.GameFramerate
 			modified = true
-		elseif main.f_input(main.t_players, {'$B'}) and config.GameSpeed > 10 then
+		elseif main.f_input(main.t_players, {'$B'}) and config.GameFramerate > 1 then
 			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
-			config.GameSpeed = config.GameSpeed - 1
-			setGameSpeed(config.GameSpeed / 100)
-			t.items[item].vardisplay = config.GameSpeed .. '%'
+			config.GameFramerate = config.GameFramerate - 1
+			setGameSpeed(config.GameFramerate)
+			t.items[item].vardisplay = config.GameFramerate
 			modified = true
 		end
 		return true
@@ -324,7 +347,7 @@ options.t_itemname = {
 			main.maxDrawGames = {config.MaxDrawGames, config.MaxDrawGames}
 			t.items[item].vardisplay = config.MaxDrawGames
 			modified = true
-		elseif main.f_input(main.t_players, {'$B'}) and main.maxDrawGames[1] > 1 then
+		elseif main.f_input(main.t_players, {'$B'}) and main.maxDrawGames[1] > 0 then
 			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
 			config.MaxDrawGames = main.maxDrawGames[1] - 1
 			main.maxDrawGames = {config.MaxDrawGames, config.MaxDrawGames}
@@ -348,7 +371,7 @@ options.t_itemname = {
 		end
 		return true
 	end,
-	--AI Palette
+	--Arcade Palette
 	['aipalette'] = function(t, item, cursorPosY, moveTxt)
 		if main.f_input(main.t_players, {'$F', '$B', 'pal', 's'}) then
 			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
@@ -358,6 +381,20 @@ options.t_itemname = {
 				config.AIRandomColor = true
 			end
 			t.items[item].vardisplay = options.f_boolDisplay(config.AIRandomColor, motif.option_info.menu_valuename_random, motif.option_info.menu_valuename_default)
+			modified = true
+		end
+		return true
+	end,
+	--Survival Palette
+	['aisurvivalpalette'] = function(t, item, cursorPosY, moveTxt)
+		if main.f_input(main.t_players, {'$F', '$B', 'pal', 's'}) then
+			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
+			if config.AISurvivalColor then
+				config.AISurvivalColor = false
+			else
+				config.AISurvivalColor = true
+			end
+			t.items[item].vardisplay = options.f_boolDisplay(config.AISurvivalColor, motif.option_info.menu_valuename_random, motif.option_info.menu_valuename_default)
 			modified = true
 		end
 		return true
@@ -603,7 +640,7 @@ options.t_itemname = {
 	end,
 	--Max Simul Chars
 	['maxsimul'] = function(t, item, cursorPosY, moveTxt)
-		if main.f_input(main.t_players, {'$F'}) and config.NumSimul[2] < 8 then
+		if main.f_input(main.t_players, {'$F'}) and config.NumSimul[2] < 4 then
 			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
 			config.NumSimul[2] = config.NumSimul[2] + 1
 			t.items[item].vardisplay = config.NumSimul[2]
@@ -741,7 +778,7 @@ options.t_itemname = {
 					txt_textinput,
 					overlay_textinput,
 					motif.option_info.textinput_offset[2],
-					main.f_ySpacing(motif.option_info, 'textinput_font'),
+					main.f_ySpacing(motif.option_info, 'textinput'),
 					motif.optionbgdef
 				))
 			if width ~= nil then
@@ -751,7 +788,7 @@ options.t_itemname = {
 					txt_textinput,
 					overlay_textinput,
 					motif.option_info.textinput_offset[2],
-					main.f_ySpacing(motif.option_info, 'textinput_font'),
+					main.f_ySpacing(motif.option_info, 'textinput'),
 					motif.optionbgdef
 				))
 				if height ~= nil then
@@ -915,6 +952,38 @@ options.t_itemname = {
 		end
 		return true
 	end,
+	--Stereo Effects
+	['stereoeffects'] = function(t, item, cursorPosY, moveTxt)
+		if main.f_input(main.t_players, {'$F', '$B', 'pal', 's'}) then
+			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
+			if config.StereoEffects then
+				config.StereoEffects = false
+			else
+				config.StereoEffects = true
+			end
+			t.items[item].vardisplay = options.f_boolDisplay(config.StereoEffects, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled)
+			setStereoEffects(config.StereoEffects)
+			modified = true
+		end
+		return true
+	end,
+	--Panning Width
+	['panningrange'] = function(t, item, cursorPosY, moveTxt)
+		if main.f_input(main.t_players, {'$F'}) and config.PanningRange < 100 then
+			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
+			config.PanningRange = config.PanningRange + 1
+			setPanningRange(config.PanningRange)
+			t.items[item].vardisplay = config.PanningRange .. '%'
+			modified = true
+		elseif main.f_input(main.t_players, {'$B'}) and config.PanningRange > 0 then
+			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
+			config.PanningRange = config.PanningRange - 1
+			setPanningRange(config.PanningRange)
+			t.items[item].vardisplay = config.PanningRange .. '%'
+			modified = true
+		end
+		return true
+	end,
 	--Key Config
 	['keyboard'] = function(t, item, cursorPosY, moveTxt)
 		if main.f_input(main.t_players, {'pal', 's'}) --[[or getKey():match('^F[0-9]+$')]] then
@@ -967,14 +1036,12 @@ options.t_itemname = {
 			config.Players = math.min(8, config.Players + 2)
 			t.items[item].vardisplay = config.Players
 			main.f_setPlayers(config.Players, true)
-			motif.f_loadCursorData()
 			modified = true
 		elseif main.f_input(main.t_players, {'$B'}) and config.Players > 2 then
 			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
 			config.Players = math.max(2, config.Players - 2)
 			t.items[item].vardisplay = config.Players
 			main.f_setPlayers(config.Players, true)
-			motif.f_loadCursorData()
 			modified = true
 		end
 		return true
@@ -994,6 +1061,35 @@ options.t_itemname = {
 		end
 		return true
 	end,
+	--Debug Mode
+	['debugmode'] = function(t, item, cursorPosY, moveTxt)
+		if main.f_input(main.t_players, {'$F', '$B', 'pal', 's'}) then
+			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
+			if config.DebugMode then
+				config.DebugMode = false
+			else
+				config.DebugMode = true
+			end
+			t.items[item].vardisplay = options.f_boolDisplay(config.DebugMode, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled)
+			setAllowDebugMode(config.DebugMode)
+			modified = true
+		end
+		return true
+	end,
+	--Background Loading
+	--[[['backgroundloading'] = function(t, item, cursorPosY, moveTxt)
+		if main.f_input(main.t_players, {'$F', '$B', 'pal', 's'}) then
+			sndPlay(motif.files.snd_data, motif.option_info.cursor_move_snd[1], motif.option_info.cursor_move_snd[2])
+			if config.BackgroundLoading then
+				config.BackgroundLoading = false
+			else
+				config.BackgroundLoading = true
+			end
+			t.items[item].vardisplay = options.f_boolDisplay(config.BackgroundLoading, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled)
+			modified = true
+		end
+		return true
+	end,]]
 	--HelperMax
 	['helpermax'] = function(t, item, cursorPosY, moveTxt)
 		if main.f_input(main.t_players, {'$F'}) then
@@ -1069,11 +1165,6 @@ options.t_itemname = {
 			if modified then
 				options.f_saveCfg(needReload)
 			end
-			main.f_bgReset(motif[main.background].bg)
-			main.f_fadeReset('fadeout', motif.option_info)
-			if motif.music.option_bgm ~= '' then
-				main.f_playBGM(true, motif.music.title_bgm, motif.music.title_bgm_loop, motif.music.title_bgm_volume, motif.music.title_bgm_loopstart, motif.music.title_bgm_loopend)
-			end
 			main.close = true
 			--return false
 		end
@@ -1086,20 +1177,25 @@ options.t_itemname = {
 			if needReload then
 				main.f_warning(main.f_extractText(motif.warning_info.text_noreload_text), motif.optionbgdef)
 			end
-			main.f_bgReset(motif[main.background].bg)
-			main.f_fadeReset('fadeout', motif.option_info)
-			if motif.music.option_bgm ~= '' then
-				main.f_playBGM(true, motif.music.title_bgm, motif.music.title_bgm_loop, motif.music.title_bgm_volume, motif.music.title_bgm_loopstart, motif.music.title_bgm_loopend)
-			end
 			main.close = true
 			--return false
+		end
+		return true
+	end,
+	--Save Settings
+	['savesettings'] = function(t, item, cursorPosY, moveTxt)
+		if main.f_input(main.t_players, {'$F', '$B', 'pal', 's'}) then
+			sndPlay(motif.files.snd_data, motif.option_info.cursor_done_snd[1], motif.option_info.cursor_done_snd[2])
+			if modified then
+				options.f_saveCfg(needReload)
+			end
 		end
 		return true
 	end,
 }
 --external shaders
 options.t_shaders = {}
-for k, v in ipairs(getDirectoryFiles('external/shaders')) do
+for _, v in ipairs(getDirectoryFiles('external/shaders')) do
 	v:gsub('^(.-)([^\\/]+)%.([^%.\\/]-)$', function(path, filename, ext)
 		path = path:gsub('\\', '/')
 		ext = ext:lower()
@@ -1111,7 +1207,7 @@ for k, v in ipairs(getDirectoryFiles('external/shaders')) do
 				if main.f_input(main.t_players, {'pal', 's'}) then
 					sndPlay(motif.files.snd_data, motif.option_info.cursor_done_snd[1], motif.option_info.cursor_done_snd[2])
 					config.ExternalShaders = {path .. filename}
-					config.PostProcessingShader = 4
+					config.PostProcessingShader = 1
 					return false
 				end
 				return true
@@ -1119,7 +1215,7 @@ for k, v in ipairs(getDirectoryFiles('external/shaders')) do
 		end
 	end)
 end
-for k, v in ipairs(main.f_tableExists(main.t_sort.option_info).menu) do
+for _, v in ipairs(main.f_tableExists(main.t_sort.option_info).menu) do
 	--resolution
 	if v:match('_[0-9]+x[0-9]+$') then
 		local width, height = v:match('_([0-9]+)x([0-9]+)$')
@@ -1157,6 +1253,7 @@ for k, v in ipairs(main.f_tableExists(main.t_sort.option_info).menu) do
 end
 if main.debugLog then main.f_printTable(options.t_itemname, 'debug/t_optionsItemname.txt') end
 
+-- Shared menu loop logic
 function options.f_createMenu(tbl, bool_main)
 	return function()
 		local cursorPosY = 1
@@ -1166,7 +1263,9 @@ function options.f_createMenu(tbl, bool_main)
 		if bool_main then
 			main.f_bgReset(motif.optionbgdef.bg)
 			main.f_fadeReset('fadein', motif.option_info)
-			main.f_playBGM(false, motif.music.option_bgm, motif.music.option_bgm_loop, motif.music.option_bgm_volume, motif.music.option_bgm_loopstart, motif.music.option_bgm_loopend)
+			if motif.music.option_bgm ~= '' then
+				main.f_playBGM(false, motif.music.option_bgm, motif.music.option_bgm_loop, motif.music.option_bgm_volume, motif.music.option_bgm_loopstart, motif.music.option_bgm_loopend)
+			end
 			main.close = false
 		end
 		while true do
@@ -1181,9 +1280,7 @@ function options.f_createMenu(tbl, bool_main)
 			if main.close and not main.fadeActive then
 				main.f_bgReset(motif[main.background].bg)
 				main.f_fadeReset('fadein', motif[main.group])
-				if motif.music.option_bgm ~= '' then
-					main.f_playBGM(true, motif.music.title_bgm, motif.music.title_bgm_loop, motif.music.title_bgm_volume, motif.music.title_bgm_loopstart, motif.music.title_bgm_loopend)
-				end
+				main.f_playBGM(false, motif.music.title_bgm, motif.music.title_bgm_loop, motif.music.title_bgm_volume, motif.music.title_bgm_loopstart, motif.music.title_bgm_loopend)
 				main.close = false
 				break
 			elseif esc() or main.f_input(main.t_players, {'m'}) then
@@ -1217,84 +1314,207 @@ function options.f_createMenu(tbl, bool_main)
 	end
 end
 
---reset vardisplay in tables
-function options.f_resetVardisplay(t)
-	for k, v in pairs(t) do
-		if k == 'items' and type(v) == "table" and #v > 0 then
-			for i, v2 in ipairs(v) do
-				if v2.vardisplay ~= nil then
-					v2.vardisplay = options.f_vardisplay(v2.itemname)
-				end
-			end
-		elseif k == 'submenu' and type(v) == "table" then
-			for k2, v2 in pairs(v) do
-				options.f_resetVardisplay(v2)
-			end
-		end
-	end
-end
+options.t_vardisplayPointers = {}
 
+-- Associative elements table storing functions returning current setting values
+-- rendered alongside menu item name. Can be appended via external module.
+options.t_vardisplay = {
+	['afterimagemax'] = function()
+		return config.MaxAfterImage 
+	end,
+	['aipalette'] = function()
+		return options.f_boolDisplay(config.AIRandomColor, motif.option_info.menu_valuename_random, motif.option_info.menu_valuename_default) 
+	end,
+	['aisurvivalpalette'] = function()
+		return options.f_boolDisplay(config.AISurvivalColor, motif.option_info.menu_valuename_random, motif.option_info.menu_valuename_default) 
+	end,
+	['airamping'] = function()
+		return options.f_boolDisplay(config.AIRamping) 
+	end,
+	['audioducking'] = function()
+		return options.f_boolDisplay(config.AudioDucking, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled) 
+	end,
+	['autoguard'] = function()
+		return options.f_boolDisplay(config.AutoGuard) 
+	end,
+	--['backgroundloading'] = function()
+	--	return options.f_boolDisplay(config.BackgroundLoading, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled) 
+	--end,
+	['bgmvolume'] = function()
+		return config.VolumeBgm .. '%' 
+	end,
+	['credits'] = function()
+		return options.f_definedDisplay(config.Credits, {[0] = motif.option_info.menu_valuename_disabled}, config.Credits) 
+	end,
+	['debugkeys'] = function()
+		return options.f_boolDisplay(config.DebugKeys, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled) 
+	end,
+	['debugmode'] = function()
+		return options.f_boolDisplay(config.DebugMode, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled) 
+	end,
+	['difficulty'] = function()
+		return config.Difficulty 
+	end,
+	['explodmax'] = function()
+		return config.MaxExplod 
+	end,
+	['fullscreen'] = function()
+		return options.f_boolDisplay(config.Fullscreen) 
+	end,
+	['gamespeed'] = function()
+		return config.GameFramerate 
+	end,
+	['guardbar'] = function()
+		return options.f_boolDisplay(config.BarGuard) 
+	end,
+	['helpermax'] = function()
+		return config.MaxHelper 
+	end,
+	['lifemul'] = function()
+		return config.LifeMul .. '%' 
+	end,
+	['losekosimul'] = function()
+		return options.f_boolDisplay(config.LoseSimul) 
+	end,
+	['losekotag'] = function()
+		return options.f_boolDisplay(config.LoseTag) 
+	end,
+	['mastervolume'] = function()
+		return config.VolumeMaster .. '%' 
+	end,
+	['maxdrawgames'] = function()
+		return main.maxDrawGames[1] 
+	end,
+	['maxsimul'] = function()
+		return config.NumSimul[2] 
+	end,
+	['maxtag'] = function()
+		return config.NumTag[2] 
+	end,
+	['maxturns'] = function()
+		return config.NumTurns[2] 
+	end,
+	['minsimul'] = function()
+		return config.NumSimul[1] 
+	end,
+	['mintag'] = function()
+		return config.NumTag[1] 
+	end,
+	['minturns'] = function()
+		return config.NumTurns[1] 
+	end,
+	['msaa'] = function()
+		return options.f_boolDisplay(config.MSAA, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled) 
+	end,
+	['panningrange'] = function()
+		return config.PanningRange .. '%' 
+	end,
+	['players'] = function()
+		return config.Players 
+	end,
+	['portchange'] = function()
+		return config.ListenPort 
+	end,
+	['projectilemax'] = function()
+		return config.MaxPlayerProjectile 
+	end,
+	['quickcontinue'] = function()
+		return options.f_boolDisplay(config.QuickContinue) 
+	end,
+	['ratio1attack'] = function()
+		return options.f_displayRatio(config.RatioAttack[1]) 
+	end,
+	['ratio1life'] = function()
+		return options.f_displayRatio(config.RatioLife[1]) 
+	end,
+	['ratio2attack'] = function()
+		return options.f_displayRatio(config.RatioAttack[2]) 
+	end,
+	['ratio2life'] = function()
+		return options.f_displayRatio(config.RatioLife[2]) 
+	end,
+	['ratio3attack'] = function()
+		return options.f_displayRatio(config.RatioAttack[3]) 
+	end,
+	['ratio3life'] = function()
+		return options.f_displayRatio(config.RatioLife[3]) 
+	end,
+	['ratio4attack'] = function()
+		return options.f_displayRatio(config.RatioAttack[4]) 
+	end,
+	['ratio4life'] = function()
+		return options.f_displayRatio(config.RatioLife[4]) 
+	end,
+	['ratiorecoverybase'] = function()
+		return config.RatioRecoveryBase .. '%' 
+	end,
+	['ratiorecoverybonus'] = function()
+		return config.RatioRecoveryBonus .. '%' 
+	end,
+	['redlifebar'] = function()
+		return options.f_boolDisplay(config.BarRedLife) 
+	end,
+	['resolution'] = function()
+		return config.GameWidth .. 'x' .. config.GameHeight 
+	end,
+	['roundsnumsimul'] = function()
+		return main.roundsNumSimul[1] 
+	end,
+	['roundsnumsingle'] = function()
+		return main.roundsNumSingle[1] 
+	end,
+	['roundsnumtag'] = function()
+		return main.roundsNumTag[1] 
+	end,
+	['roundtime'] = function()
+		return options.f_definedDisplay(config.RoundTime, {[-1] = motif.option_info.menu_valuename_none}, config.RoundTime) 
+	end,
+	['sfxvolume'] = function()
+		return config.VolumeSfx .. '%' 
+	end,
+	['shaders'] = function()
+		return f_externalShaderName() 
+	end,
+	['singlevsteamlife'] = function()
+		return config.Team1VS2Life .. '%' 
+	end,
+	['stereoeffects'] = function()
+		return options.f_boolDisplay(config.StereoEffects, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled) 
+	end,
+	['stunbar'] = function()
+		return options.f_boolDisplay(config.BarStun) 
+	end,
+	['teamduplicates'] = function()
+		return options.f_boolDisplay(config.TeamDuplicates) 
+	end,
+	['teamlifeshare'] = function()
+		return options.f_boolDisplay(config.TeamLifeShare) 
+	end,
+	['teampowershare'] = function()
+		return options.f_boolDisplay(config.TeamPowerShare) 
+	end,
+	['turnsrecoverybase'] = function()
+		return config.TurnsRecoveryBase .. '%' 
+	end,
+	['turnsrecoverybonus'] = function()
+		return config.TurnsRecoveryBonus .. '%' 
+	end,
+	['vretrace'] = function()
+		return options.f_definedDisplay(config.VRetrace, {[1] = motif.option_info.menu_valuename_enabled}, motif.option_info.menu_valuename_disabled) 
+	end,
+}
+
+-- Returns setting value rendered alongside menu item name (calls appropriate
+-- function from t_vardisplay table)
 function options.f_vardisplay(itemname)
-	if itemname == 'afterimagemax' then return config.MaxAfterImage end
-	if itemname == 'aipalette' then return options.f_boolDisplay(config.AIRandomColor, motif.option_info.menu_valuename_random, motif.option_info.menu_valuename_default) end
-	if itemname == 'airamping' then return options.f_boolDisplay(config.AIRamping) end
-	if itemname == 'audioducking' then return options.f_boolDisplay(config.AudioDucking, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled) end
-	if itemname == 'autoguard' then return options.f_boolDisplay(config.AutoGuard) end
-	if itemname == 'bgmvolume' then return config.VolumeBgm .. '%' end
-	if itemname == 'credits' then return options.f_definedDisplay(config.Credits, {[0] = motif.option_info.menu_valuename_disabled}, config.Credits) end
-	if itemname == 'debugkeys' then return options.f_boolDisplay(config.DebugKeys, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled) end
-	if itemname == 'difficulty' then return config.Difficulty end
-	if itemname == 'explodmax' then return config.MaxExplod end
-	if itemname == 'fullscreen' then return options.f_boolDisplay(config.Fullscreen) end
-	if itemname == 'gamespeed' then return config.GameSpeed .. '%' end
-	if itemname == 'guardbar' then return options.f_boolDisplay(config.BarGuard) end
-	if itemname == 'helpermax' then return config.MaxHelper end
-	if itemname == 'lifemul' then return config.LifeMul .. '%' end
-	if itemname == 'losekosimul' then return options.f_boolDisplay(config.LoseSimul) end
-	if itemname == 'losekotag' then return options.f_boolDisplay(config.LoseTag) end
-	if itemname == 'mastervolume' then return config.VolumeMaster .. '%' end
-	if itemname == 'maxdrawgames' then return main.maxDrawGames[1] end
-	if itemname == 'maxsimul' then return config.NumSimul[2] end
-	if itemname == 'maxtag' then return config.NumTag[2] end
-	if itemname == 'maxturns' then return config.NumTurns[2] end
-	if itemname == 'minsimul' then return config.NumSimul[1] end
-	if itemname == 'mintag' then return config.NumTag[1] end
-	if itemname == 'minturns' then return config.NumTurns[1] end
-	if itemname == 'msaa' then return options.f_boolDisplay(config.MSAA, motif.option_info.menu_valuename_enabled, motif.option_info.menu_valuename_disabled) end
-	if itemname == 'players' then return config.Players end
-	if itemname == 'portchange' then return config.ListenPort end
-	if itemname == 'projectilemax' then return config.MaxPlayerProjectile end
-	if itemname == 'quickcontinue' then return options.f_boolDisplay(config.QuickContinue) end
-	if itemname == 'ratio1attack' then return options.f_displayRatio(config.RatioAttack[1]) end
-	if itemname == 'ratio1life' then return options.f_displayRatio(config.RatioLife[1]) end
-	if itemname == 'ratio2attack' then return options.f_displayRatio(config.RatioAttack[2]) end
-	if itemname == 'ratio2life' then return options.f_displayRatio(config.RatioLife[2]) end
-	if itemname == 'ratio3attack' then return options.f_displayRatio(config.RatioAttack[3]) end
-	if itemname == 'ratio3life' then return options.f_displayRatio(config.RatioLife[3]) end
-	if itemname == 'ratio4attack' then return options.f_displayRatio(config.RatioAttack[4]) end
-	if itemname == 'ratio4life' then return options.f_displayRatio(config.RatioLife[4]) end
-	if itemname == 'ratiorecoverybase' then return config.RatioRecoveryBase .. '%' end
-	if itemname == 'ratiorecoverybonus' then return config.RatioRecoveryBonus .. '%' end
-	if itemname == 'redlifebar' then return options.f_boolDisplay(config.BarRedLife) end
-	if itemname == 'resolution' then return config.GameWidth .. 'x' .. config.GameHeight end
-	if itemname == 'roundsnumsimul' then return main.roundsNumSimul[1] end
-	if itemname == 'roundsnumsingle' then return main.roundsNumSingle[1] end
-	if itemname == 'roundsnumtag' then return main.roundsNumTag[1] end
-	if itemname == 'roundtime' then return options.f_definedDisplay(config.RoundTime, {[-1] = motif.option_info.menu_valuename_none}, config.RoundTime) end
-	if itemname == 'sfxvolume' then return config.VolumeSfx .. '%' end
-	if itemname == 'shaders' then return f_externalShaderName() end
-	if itemname == 'singlevsteamlife' then return config.Team1VS2Life .. '%' end
-	if itemname == 'stunbar' then return options.f_boolDisplay(config.BarStun) end
-	if itemname == 'teamduplicates' then return options.f_boolDisplay(config.TeamDuplicates) end
-	if itemname == 'teamlifeshare' then return options.f_boolDisplay(config.TeamLifeShare) end
-	if itemname == 'teampowershare' then return options.f_boolDisplay(config.TeamPowerShare) end
-	if itemname == 'turnsrecoverybase' then return config.TurnsRecoveryBase .. '%' end
-	if itemname == 'turnsrecoverybonus' then return config.TurnsRecoveryBonus .. '%' end
-	if itemname == 'vretrace' then return options.f_definedDisplay(config.VRetrace, {[1] = motif.option_info.menu_valuename_enabled}, motif.option_info.menu_valuename_disabled) end
+	if options.t_vardisplay[itemname] ~= nil then
+		return options.t_vardisplay[itemname]()
+	end
 	return ''
 end
 
---dynamically generates all option screen menus and submenus using itemname data stored in main.t_sort table
+-- Dynamically generates all menus and submenus, iterating over values stored in
+-- main.t_sort table (in order that they're present in system.def).
 options.menu = {title = main.f_itemnameUpper(motif.option_info.title_text, motif.option_info.menu_title_uppercase == 1), submenu = {}, items = {}}
 options.menu.loop = options.f_createMenu(options.menu, true)
 local t_menuWindow = main.f_menuWindow(motif.option_info)
@@ -1315,6 +1535,7 @@ for i, suffix in ipairs(main.f_tableExists(main.t_sort.option_info).menu) do
 					vardisplay = options.f_vardisplay(c),
 					selected = false,
 				})
+				table.insert(options.t_vardisplayPointers, t_pos.items[#t_pos.items])
 				--creating anim data out of appended menu items
 				motif.f_loadSprData(motif.option_info, {s = 'menu_bg_' .. suffix:gsub('back$', itemname) .. '_', x = motif.option_info.menu_pos[1], y = motif.option_info.menu_pos[2]})
 				motif.f_loadSprData(motif.option_info, {s = 'menu_bg_active_' .. suffix:gsub('back$', itemname) .. '_', x = motif.option_info.menu_pos[1], y = motif.option_info.menu_pos[2]})
@@ -1332,8 +1553,10 @@ for i, suffix in ipairs(main.f_tableExists(main.t_sort.option_info).menu) do
 						displayname = motif.option_info['menu_itemname_' .. suffix],
 						paramname = 'menu_itemname_' .. suffix,
 						vardata = text:create({window = t_menuWindow}),
-						vardisplay = options.f_vardisplay(c), selected = false,
+						vardisplay = options.f_vardisplay(c),
+						selected = false,
 					})
+					table.insert(options.t_vardisplayPointers, options.menu.items[#options.menu.items])
 				end
 			end
 			t_pos = options.menu.submenu[c]
@@ -1351,6 +1574,7 @@ for i, suffix in ipairs(main.f_tableExists(main.t_sort.option_info).menu) do
 					vardisplay = options.f_vardisplay(c),
 					selected = false,
 				})
+				table.insert(options.t_vardisplayPointers, t_pos.items[#t_pos.items])
 			end
 			if j > lastNum then
 				t_pos = t_pos.submenu[c]
@@ -1428,19 +1652,13 @@ for k, v in ipairs(t_keyCfg) do
 	end
 end
 
-function options.f_keyDefault(pn)
-	local first = 1
-	local last = #config.KeyConfig
-	if pn ~= nil then
-		first = pn
-		last = pn
-	end
+function options.f_keyDefault()
 	local btns = {}
-	for i = first, last do
+	for i = 1, #config.KeyConfig do
 		if i == 1 then
 			btns = {up = 'UP', down = 'DOWN', left = 'LEFT', right = 'RIGHT', a = 'z', b = 'x', c = 'c', x = 'a', y = 's', z = 'd', start = 'RETURN', d = 'q', w = 'w'}
 		elseif i == 2 then
-			btns = {up = 'i', down = 'k', left = 'j', right = 'l', a = 'f', b = 'g', c = 'h', x = 'r', y = 't', z = 'y', start = 'RSHIFT', d = 'LEFTBRACKET', w = 'RIGHTBRACKET'}
+			btns = {up = 'i', down = 'k', left = 'j', right = 'l', a = 'f', b = 'g', c = 'h', x = 'r', y = 't', z = 'y', start = 'RSHIFT', d = 'LBRACKET', w = 'RBRACKET'}
 		else
 			btns = {}
 		end
@@ -1452,8 +1670,8 @@ function options.f_keyDefault(pn)
 			end
 		end
 	end
-	btns = {up = '10', down = '12', left = '13', right = '11', a = '0', b = '1', c = '4', x = '2', y = '3', z = '5', start = '7', d = '-10', w = '-12', menu = '6'}
-	for i = first, last do
+	btns = {up = '10', down = '12', left = '13', right = '11', a = '0', b = '1', c = '5', x = '2', y = '3', z = '-12', start = '7', d = '4', w = '-10', menu = '6'}
+	for i = 1, #config.JoystickConfig do
 		for j = 1, #config.JoystickConfig[i].Buttons do
 			if not t_btnEnabled[t_btnNumName[j]] or btns[t_btnNumName[j]] == nil then
 				config.JoystickConfig[i].Buttons[j] = tostring(motif.option_info.menu_valuename_nokey)
@@ -1702,12 +1920,12 @@ function options.f_keyCfg(cfgType, controller, bgdef, skipClear)
 			text =   motif.option_info.keymenu_itemname_playerno:gsub('%%i', tostring(i + player - side)),
 			x =      motif.option_info['keymenu_p' .. i .. '_pos'][1] + motif.option_info['keymenu_item_p' .. i .. '_offset'][1],
 			y =      motif.option_info['keymenu_p' .. i .. '_pos'][2] + motif.option_info['keymenu_item_p' .. i .. '_offset'][2],
-			scaleX = motif.option_info['keymenu_item_p' .. i .. '_font_scale'][1],
-			scaleY = motif.option_info['keymenu_item_p' .. i .. '_font_scale'][2],
+			scaleX = motif.option_info['keymenu_item_p' .. i .. '_scale'][1],
+			scaleY = motif.option_info['keymenu_item_p' .. i .. '_scale'][2],
 			r =      motif.option_info['keymenu_item_p' .. i .. '_font'][4],
 			g =      motif.option_info['keymenu_item_p' .. i .. '_font'][5],
 			b =      motif.option_info['keymenu_item_p' .. i .. '_font'][6],
-			height = motif.option_info['keymenu_item_p' .. i .. '_font_height'],
+			height = motif.option_info['keymenu_item_p' .. i .. '_font'][7],
 			defsc =  motif.defaultOptions,
 		})
 		txt_keyController[i]:draw()
@@ -1764,12 +1982,12 @@ function options.f_keyCfg(cfgType, controller, bgdef, skipClear)
 						text =   t[i].displayname,
 						x =      t_pos[j][1] + motif.option_info.keymenu_item_active_offset[1] + (i - 1) * motif.option_info.keymenu_item_spacing[1],
 						y =      t_pos[j][2] + motif.option_info.keymenu_item_active_offset[2] + (i - 1) * motif.option_info.keymenu_item_spacing[2],
-						scaleX = motif.option_info.keymenu_item_active_font_scale[1],
-						scaleY = motif.option_info.keymenu_item_active_font_scale[2],
+						scaleX = motif.option_info.keymenu_item_active_scale[1],
+						scaleY = motif.option_info.keymenu_item_active_scale[2],
 						r =      motif.option_info.keymenu_item_active_font[4],
 						g =      motif.option_info.keymenu_item_active_font[5],
 						b =      motif.option_info.keymenu_item_active_font[6],
-						height = motif.option_info.keymenu_item_active_font_height,
+						height = motif.option_info.keymenu_item_active_font[7],
 						defsc =  motif.defaultOptions,
 					})
 					t[i].data[j]:draw()
@@ -1783,12 +2001,12 @@ function options.f_keyCfg(cfgType, controller, bgdef, skipClear)
 								text =   t[i]['vardisplay' .. j + player - side],
 								x =      t_pos[j][1] + motif.option_info.keymenu_item_value_conflict_offset[1] + (i - 1) * motif.option_info.keymenu_item_spacing[1],
 								y =      t_pos[j][2] + motif.option_info.keymenu_item_value_conflict_offset[2] + (i - 1) * motif.option_info.keymenu_item_spacing[2],
-								scaleX = motif.option_info.keymenu_item_value_conflict_font_scale[1],
-								scaleY = motif.option_info.keymenu_item_value_conflict_font_scale[2],
+								scaleX = motif.option_info.keymenu_item_value_conflict_scale[1],
+								scaleY = motif.option_info.keymenu_item_value_conflict_scale[2],
 								r =      motif.option_info.keymenu_item_value_conflict_font[4],
 								g =      motif.option_info.keymenu_item_value_conflict_font[5],
 								b =      motif.option_info.keymenu_item_value_conflict_font[6],
-								height = motif.option_info.keymenu_item_value_conflict_font_height,
+								height = motif.option_info.keymenu_item_value_conflict_font[7],
 								defsc =  motif.defaultOptions,
 							})
 							t[i].vardata[j]:draw()
@@ -1801,12 +2019,12 @@ function options.f_keyCfg(cfgType, controller, bgdef, skipClear)
 								text =   t[i]['vardisplay' .. j + player - side],
 								x =      t_pos[j][1] + motif.option_info.keymenu_item_value_active_offset[1] + (i - 1) * motif.option_info.keymenu_item_spacing[1],
 								y =      t_pos[j][2] + motif.option_info.keymenu_item_value_active_offset[2] + (i - 1) * motif.option_info.keymenu_item_spacing[2],
-								scaleX = motif.option_info.keymenu_item_value_active_font_scale[1],
-								scaleY = motif.option_info.keymenu_item_value_active_font_scale[2],
+								scaleX = motif.option_info.keymenu_item_value_active_scale[1],
+								scaleY = motif.option_info.keymenu_item_value_active_scale[2],
 								r =      motif.option_info.keymenu_item_value_active_font[4],
 								g =      motif.option_info.keymenu_item_value_active_font[5],
 								b =      motif.option_info.keymenu_item_value_active_font[6],
-								height = motif.option_info.keymenu_item_value_active_font_height,
+								height = motif.option_info.keymenu_item_value_active_font[7],
 								defsc =  motif.defaultOptions,
 							})
 							t[i].vardata[j]:draw()
@@ -1820,12 +2038,12 @@ function options.f_keyCfg(cfgType, controller, bgdef, skipClear)
 							text =   t[i].infodisplay,
 							x =      t_pos[j][1] + motif.option_info.keymenu_item_info_active_offset[1] + (i - 1) * motif.option_info.keymenu_item_spacing[1],
 							y =      t_pos[j][2] + motif.option_info.keymenu_item_info_active_offset[2] + (i - 1) * motif.option_info.keymenu_item_spacing[2],
-							scaleX = motif.option_info.keymenu_item_value_active_font_scale[1],
-							scaleY = motif.option_info.keymenu_item_value_active_font_scale[2],
+							scaleX = motif.option_info.keymenu_item_value_active_scale[1],
+							scaleY = motif.option_info.keymenu_item_value_active_scale[2],
 							r =      motif.option_info.keymenu_item_info_active_font[4],
 							g =      motif.option_info.keymenu_item_info_active_font[5],
 							b =      motif.option_info.keymenu_item_info_active_font[6],
-							height = motif.option_info.keymenu_item_info_active_font_height,
+							height = motif.option_info.keymenu_item_info_active_font[7],
 							defsc =  motif.defaultOptions,
 						})
 						t[i].infodata[j]:draw()
@@ -1844,12 +2062,12 @@ function options.f_keyCfg(cfgType, controller, bgdef, skipClear)
 						text =   t[i].displayname,
 						x =      t_pos[j][1] + motif.option_info.keymenu_item_offset[1] + (i - 1) * motif.option_info.keymenu_item_spacing[1],
 						y =      t_pos[j][2] + motif.option_info.keymenu_item_offset[2] + (i - 1) * motif.option_info.keymenu_item_spacing[2],
-						scaleX = motif.option_info.keymenu_item_font_scale[1],
-						scaleY = motif.option_info.keymenu_item_font_scale[2],
+						scaleX = motif.option_info.keymenu_item_scale[1],
+						scaleY = motif.option_info.keymenu_item_scale[2],
 						r =      motif.option_info.keymenu_item_font[4],
 						g =      motif.option_info.keymenu_item_font[5],
 						b =      motif.option_info.keymenu_item_font[6],
-						height = motif.option_info.keymenu_item_font_height,
+						height = motif.option_info.keymenu_item_font[7],
 						defsc =  motif.defaultOptions,
 					})
 					t[i].data[j]:draw()
@@ -1863,12 +2081,12 @@ function options.f_keyCfg(cfgType, controller, bgdef, skipClear)
 								text =   t[i]['vardisplay' .. j + player - side],
 								x =      t_pos[j][1] + motif.option_info.keymenu_item_value_conflict_offset[1] + (i - 1) * motif.option_info.keymenu_item_spacing[1],
 								y =      t_pos[j][2] + motif.option_info.keymenu_item_value_conflict_offset[2] + (i - 1) * motif.option_info.keymenu_item_spacing[2],
-								scaleX = motif.option_info.keymenu_item_value_conflict_font_scale[1],
-								scaleY = motif.option_info.keymenu_item_value_conflict_font_scale[2],
+								scaleX = motif.option_info.keymenu_item_value_conflict_scale[1],
+								scaleY = motif.option_info.keymenu_item_value_conflict_scale[2],
 								r =      motif.option_info.keymenu_item_value_conflict_font[4],
 								g =      motif.option_info.keymenu_item_value_conflict_font[5],
 								b =      motif.option_info.keymenu_item_value_conflict_font[6],
-								height = motif.option_info.keymenu_item_value_conflict_font_height,
+								height = motif.option_info.keymenu_item_value_conflict_font[7],
 								defsc =  motif.defaultOptions,
 							})
 							t[i].vardata[j]:draw()
@@ -1881,12 +2099,12 @@ function options.f_keyCfg(cfgType, controller, bgdef, skipClear)
 								text =   t[i]['vardisplay' .. j + player - side],
 								x =      t_pos[j][1] + motif.option_info.keymenu_item_value_offset[1] + (i - 1) * motif.option_info.keymenu_item_spacing[1],
 								y =      t_pos[j][2] + motif.option_info.keymenu_item_value_offset[2] + (i - 1) * motif.option_info.keymenu_item_spacing[2],
-								scaleX = motif.option_info.keymenu_item_value_font_scale[1],
-								scaleY = motif.option_info.keymenu_item_value_font_scale[2],
+								scaleX = motif.option_info.keymenu_item_value_scale[1],
+								scaleY = motif.option_info.keymenu_item_value_scale[2],
 								r =      motif.option_info.keymenu_item_value_font[4],
 								g =      motif.option_info.keymenu_item_value_font[5],
 								b =      motif.option_info.keymenu_item_value_font[6],
-								height = motif.option_info.keymenu_item_value_font_height,
+								height = motif.option_info.keymenu_item_value_font[7],
 								defsc =  motif.defaultOptions,
 							})
 							t[i].vardata[j]:draw()
@@ -1900,12 +2118,12 @@ function options.f_keyCfg(cfgType, controller, bgdef, skipClear)
 							text =   t[i].infodisplay,
 							x =      t_pos[j][1] + motif.option_info.keymenu_item_info_offset[1] + (i - 1) * motif.option_info.keymenu_item_spacing[1],
 							y =      t_pos[j][2] + motif.option_info.keymenu_item_info_offset[2] + (i - 1) * motif.option_info.keymenu_item_spacing[2],
-							scaleX = motif.option_info.keymenu_item_value_active_font_scale[1],
-							scaleY = motif.option_info.keymenu_item_value_active_font_scale[2],
+							scaleX = motif.option_info.keymenu_item_value_active_scale[1],
+							scaleY = motif.option_info.keymenu_item_value_active_scale[2],
 							r =      motif.option_info.keymenu_item_info_font[4],
 							g =      motif.option_info.keymenu_item_info_font[5],
 							b =      motif.option_info.keymenu_item_info_font[6],
-							height = motif.option_info.keymenu_item_info_font_height,
+							height = motif.option_info.keymenu_item_info_font[7],
 							defsc =  motif.defaultOptions,
 						})
 						t[i].infodata[j]:draw()

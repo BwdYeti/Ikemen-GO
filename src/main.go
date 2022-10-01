@@ -72,10 +72,16 @@ func main() {
 	//os.Mkdir("debug", os.ModeSticky|0755)
 
 	// Check if the main lua file exists.
-	if !fileExists(tmp.System) {
-		var err = Error("Main lua file '" + tmp.System + "' can not be found.")
-		dialog.Message(err.Error()).Title("I.K.E.M.E.N Error").Error()
-		panic(err)
+	if ftemp, err1 := os.Open(tmp.System); err1 != nil {
+		ftemp.Close();
+		var err2 = Error(
+			"Main lua file \"" + tmp.System + "\" error." +
+			"\n" + err1.Error(),
+		)
+		dialog.Message(err2.Error()).Title("I.K.E.M.E.N Error").Error()
+		panic(err2)
+	} else {
+		ftemp.Close();
 	}
 
 	log := createLog("Ikemen.log")
@@ -178,7 +184,9 @@ Debug Options:
 type configSettings struct {
 	AIRamping                  bool
 	AIRandomColor              bool
+	AISurvivalColor            bool
 	AudioDucking               bool
+	AudioSampleRate            int32
 	AutoGuard                  bool
 	BarGuard                   bool
 	BarRedLife                 bool
@@ -193,28 +201,34 @@ type configSettings struct {
 	ControllerStickSensitivity float32
 	Credits                    int
 	DebugClipboardRows         int
+	DebugClsnDarken            bool
 	DebugConsoleRows           int
 	DebugFont                  string
 	DebugFontScale             float32
 	DebugKeys                  bool
+	DebugMode                  bool
 	Difficulty                 int
 	EscOpensMenu               bool
 	ExternalShaders            []string
 	FirstRun                   bool
-	FontShaderVer              string
+	FontShaderVer              uint
 	ForceStageZoomin           float32
 	ForceStageZoomout          float32
+	Framerate                  int32
 	Fullscreen                 bool
+	FullscreenRefreshRate      int32
+	FullscreenWidth            int32
+	FullscreenHeight           int32
 	GameWidth                  int32
 	GameHeight                 int32
-	GameSpeed                  float32
+	GameFramerate              float32
 	IP                         map[string]string
-	LifebarFontScale           float32
 	LifeMul                    float32
 	ListenPort                 string
 	LoseSimul                  bool
 	LoseTag                    bool
 	MaxAfterImage              int32
+	MaxBgmVolume               int
 	MaxDrawGames               int32
 	MaxExplod                  int
 	MaxHelper                  int32
@@ -225,6 +239,7 @@ type configSettings struct {
 	NumSimul                   [2]int
 	NumTag                     [2]int
 	NumTurns                   [2]int
+	PanningRange               float32
 	Players                    int
 	PngSpriteFilter            bool
 	PostProcessingShader       int32
@@ -239,6 +254,7 @@ type configSettings struct {
 	RoundTime                  int32
 	ScreenshotFolder           string
 	StartStage                 string
+	StereoEffects              bool
 	System                     string
 	Team1VS2Life               float32
 	TeamDuplicates             bool
@@ -251,6 +267,7 @@ type configSettings struct {
 	VolumeMaster               int
 	VolumeSfx                  int
 	VRetrace                   int
+	WindowCentered             bool
 	WindowIcon                 []string
 	WindowTitle                string
 	XinputTriggerSensitivity   float32
@@ -273,14 +290,16 @@ func setupConfig() configSettings {
 	defcfg := []byte(strings.Join(strings.Split(
 		`{
 	"AIRamping": true,
-	"AIRandomColor": true,
+	"AIRandomColor": false,
+	"AISurvivalColor": true,
 	"AudioDucking": false,
+	"AudioSampleRate": 44100,
 	"AutoGuard": false,
 	"BarGuard": false,
 	"BarRedLife": true,
 	"BarStun": false,
 	"Borderless": false,
-	"ComboExtraFrameWindow": 1,
+	"ComboExtraFrameWindow": 0,
 	"CommonAir": "data/common.air",
 	"CommonCmd": "data/common.cmd",
 	"CommonConst": "data/common.const",
@@ -291,35 +310,41 @@ func setupConfig() configSettings {
 		"data/action.zss",
 		"data/dizzy.zss",
 		"data/guardbreak.zss",
-		"data/rank.zss",
 		"data/score.zss",
-		"data/tag.zss"
+		"data/tag.zss",
+		"data/training.zss"
     ],
 	"ControllerStickSensitivity": 0.4,
 	"Credits": 10,
 	"DebugClipboardRows": 2,
+	"DebugClsnDarken": true,
 	"DebugConsoleRows": 15,
-	"DebugFont": "font/default-3x5-bold.def",
+	"DebugFont": "font/debug.def",
 	"DebugFontScale": 1,
 	"DebugKeys": true,
-	"Difficulty": 8,
+	"DebugMode": true,
+	"Difficulty": 5,
 	"EscOpensMenu": true,
 	"ExternalShaders": [],
 	"FirstRun": true,
-	"FontShaderVer": "150 core",
+	"FontShaderVer": 120,
 	"ForceStageZoomin": 0,
 	"ForceStageZoomout": 0,
+	"Framerate": 60,
 	"Fullscreen": false,
+	"FullscreenRefreshRate": 60,
+	"FullscreenWidth": -1,
+	"FullscreenHeight": -1,
 	"GameWidth": 640,
 	"GameHeight": 480,
-	"GameSpeed": 100,
+	"GameFramerate": 60,
 	"IP": {},
-	"LifebarFontScale": 1,
 	"LifeMul": 100,
 	"ListenPort": "7500",
 	"LoseSimul": true,
 	"LoseTag": false,
 	"MaxAfterImage": 128,
+	"MaxBgmVolume": 100,
 	"MaxDrawGames": -2,
 	"MaxExplod": 512,
 	"MaxHelper": 56,
@@ -339,6 +364,7 @@ func setupConfig() configSettings {
 		2,
 		4
 	],
+	"PanningRange": 30,
 	"Players": 4,
 	"PngSpriteFilter": true,
 	"PostProcessingShader": 0,
@@ -362,21 +388,25 @@ func setupConfig() configSettings {
 	"RoundsNumTag": 2,
 	"RoundTime": 99,
 	"ScreenshotFolder": "",
-	"StartStage" : "stages/stage0-720.def",
+	"StartStage": "stages/stage1.def",
+	"StereoEffects": true,
 	"System": "external/script/main.lua",
 	"Team1VS2Life": 100,
 	"TeamDuplicates": true,
 	"TeamLifeShare": false,
 	"TeamPowerShare": true,
-	"TrainingChar": "chars/training/training.def",
+	"TrainingChar": "",
 	"TurnsRecoveryBase": 0,
 	"TurnsRecoveryBonus": 20,
 	"VolumeBgm": 80,
 	"VolumeMaster": 80,
 	"VolumeSfx": 80,
-	"VRetrace": 1, 
+	"VRetrace": 1,
+	"WindowCentered": true,
 	"WindowIcon": [
-		"external/icons/IkemenCylia.png"
+		"external/icons/IkemenCylia_256.png",
+		"external/icons/IkemenCylia_96.png",
+		"external/icons/IkemenCylia_48.png"
 	],
 	"WindowTitle": "Ikemen GO",
 	"XinputTriggerSensitivity": 0,
@@ -417,8 +447,8 @@ func setupConfig() configSettings {
 				"t",
 				"y",
 				"RSHIFT",
-				"LEFTBRACKET",
-				"RIGHTBRACKET",
+				"LBRACKET",
+				"RBRACKET",
 				"Not used"
 			]
 		},
@@ -471,13 +501,13 @@ func setupConfig() configSettings {
 				"11",
 				"0",
 				"1",
-				"4",
+				"5",
 				"2",
 				"3",
-				"5",
-				"7",
-				"-10",
 				"-12",
+				"7",
+				"4",
+				"-10",
 				"6"
 			]
 		},
@@ -490,13 +520,13 @@ func setupConfig() configSettings {
 				"11",
 				"0",
 				"1",
-				"4",
+				"5",
 				"2",
 				"3",
-				"5",
-				"7",
-				"-10",
 				"-12",
+				"7",
+				"4",
+				"-10",
 				"6"
 			]
 		},
@@ -509,13 +539,13 @@ func setupConfig() configSettings {
 				"11",
 				"0",
 				"1",
-				"4",
+				"5",
 				"2",
 				"3",
-				"5",
-				"7",
-				"-10",
 				"-12",
+				"7",
+				"4",
+				"-10",
 				"6"
 			]
 		},
@@ -528,13 +558,13 @@ func setupConfig() configSettings {
 				"11",
 				"0",
 				"1",
-				"4",
+				"5",
 				"2",
 				"3",
-				"5",
-				"7",
-				"-10",
 				"-12",
+				"7",
+				"4",
+				"-10",
 				"6"
 			]
 		}
@@ -545,7 +575,6 @@ func setupConfig() configSettings {
 	// Unmarshal default config string into a struct
 	tmp := configSettings{}
 	chk(json.Unmarshal(defcfg, &tmp))
-
 	// Config file path
 	cfgPath := "save/config.json"
 	// If a different config file is defined in the command line parameters, use it instead
@@ -560,18 +589,47 @@ func setupConfig() configSettings {
 		}
 		chkEX(json.Unmarshal(bytes, &tmp), "Error while loading the config file.\n")
 	}
-
+	// Fix incorrect settings (default values saved into config.json)
+	switch tmp.AudioSampleRate {
+	case 22050, 44100, 48000:
+	default:
+		tmp.AudioSampleRate = 44100
+	}
+	if tmp.Framerate <= 0 || tmp.Framerate > 840 {
+		tmp.Framerate = 60
+	}
+	if tmp.MaxBgmVolume < 100 || tmp.MaxBgmVolume > 250 {
+		tmp.MaxBgmVolume = 100
+	}
+	if tmp.NumSimul[1] > MaxSimul {
+		tmp.NumSimul[1] = MaxSimul
+	}
+	if tmp.NumTag[1] > MaxSimul {
+		tmp.NumTag[1] = MaxSimul
+	}
+	if tmp.Players > MaxSimul*2 {
+		tmp.Players = MaxSimul * 2
+	}
+	if tmp.PanningRange > 100 {
+		tmp.PanningRange = 100
+	} else if tmp.PanningRange < 0 {
+		tmp.PanningRange = 0
+	}
+	// Save config file
 	cfg, _ := json.MarshalIndent(tmp, "", "	")
 	chk(ioutil.WriteFile(cfgPath, cfg, 0644))
 
 	// Set each config property to the system object
 	sys.afterImageMax = tmp.MaxAfterImage
 	sys.allowDebugKeys = tmp.DebugKeys
+	sys.allowDebugMode = tmp.DebugMode
 	sys.audioDucking = tmp.AudioDucking
+	Mp3SampleRate = int(tmp.AudioSampleRate)
 	sys.bgmVolume = tmp.VolumeBgm
+	sys.maxBgmVolume = tmp.MaxBgmVolume
 	sys.borderless = tmp.Borderless
 	sys.gs.cam.ZoomDelayEnable = tmp.ZoomDelay
-	sys.gs.cam.ZoomEnable = tmp.ZoomActive
+	sys.gs.cam.ZoomActive = tmp.ZoomActive
 	sys.gs.cam.ZoomMax = tmp.ForceStageZoomin
 	sys.gs.cam.ZoomMin = tmp.ForceStageZoomout
 	sys.gs.cam.ZoomSpeed = 12 - tmp.ZoomSpeed
@@ -586,17 +644,22 @@ func setupConfig() configSettings {
 	sys.commonLua = tmp.CommonLua
 	sys.commonStates = tmp.CommonStates
 	sys.clipboardRows = tmp.DebugClipboardRows
+	sys.clsnDarken = tmp.DebugClsnDarken
 	sys.consoleRows = tmp.DebugConsoleRows
 	sys.controllerStickSensitivity = tmp.ControllerStickSensitivity
 	sys.explodMax = tmp.MaxExplod
 	sys.externalShaderList = tmp.ExternalShaders
-	if len(tmp.FontShaderVer) > 1 {
-		sys.fontShaderVer = tmp.FontShaderVer
-	}
+	sys.fontShaderVer = tmp.FontShaderVer
+	// Resoluion stuff
 	sys.fullscreen = tmp.Fullscreen
-	sys.gameSpeed = tmp.GameSpeed / 100
+	sys.fullscreenRefreshRate = tmp.FullscreenRefreshRate
+	sys.fullscreenWidth = tmp.FullscreenWidth
+	sys.fullscreenHeight = tmp.FullscreenHeight
+	FPS = int(tmp.Framerate)
+	sys.gameWidth = tmp.GameWidth
+	sys.gameHeight = tmp.GameHeight
+	sys.gameSpeed = tmp.GameFramerate / float32(tmp.Framerate)
 	sys.helperMax = tmp.MaxHelper
-	sys.lifebarFontScale = tmp.LifebarFontScale
 	sys.lifeMul = tmp.LifeMul / 100
 	sys.lifeShare = [...]bool{tmp.TeamLifeShare, tmp.TeamLifeShare}
 	sys.listenPort = tmp.ListenPort
@@ -604,6 +667,7 @@ func setupConfig() configSettings {
 	sys.loseTag = tmp.LoseTag
 	sys.masterVolume = tmp.VolumeMaster
 	sys.multisampleAntialiasing = tmp.MSAA
+	sys.panningRange = tmp.PanningRange
 	sys.playerProjectileMax = tmp.MaxPlayerProjectile
 	sys.postProcessingShader = tmp.PostProcessingShader
 	sys.pngFilter = tmp.PngSpriteFilter
@@ -616,9 +680,11 @@ func setupConfig() configSettings {
 	} else {
 		sys.screenshotFolder = tmp.ScreenshotFolder
 	}
+	sys.stereoEffects = tmp.StereoEffects
 	sys.team1VS2Life = tmp.Team1VS2Life / 100
 	sys.vRetrace = tmp.VRetrace
 	sys.wavVolume = tmp.VolumeSfx
+	sys.windowCentered = tmp.WindowCentered
 	sys.windowMainIconLocation = tmp.WindowIcon
 	sys.windowTitle = tmp.WindowTitle
 	sys.xinputTriggerSensitivity = tmp.XinputTriggerSensitivity
@@ -653,13 +719,4 @@ func setupConfig() configSettings {
 	}
 
 	return tmp
-}
-
-// fileExists checks if a file exists and is not a directory before we use it
-func fileExists(filename string) bool {
-	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
 }

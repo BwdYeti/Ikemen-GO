@@ -4,7 +4,6 @@
 Default.Enable.Action = 1
 Default.Enable.Dizzy = 1
 Default.Enable.GuardBreak = 1
-Default.Enable.Rank = 1
 Default.Enable.Score = 1
 Default.Enable.Tag = 1
 
@@ -19,12 +18,13 @@ Default.IgnoreDefeatedEnemies = 1   ; prevents EnemyNear from redirecting defeat
 Input.PauseOnHitPause = 1           ; controls if inputs should be retained during hit pause
 
 ; tag.zss options
-TagInTime = 20                 ; tag-in time (MvCI: default distance = TagInTime * TagInVelX, base: total switch time)
-TagInVelX = 12.5               ; tag-in Vel X (MvCI: set to, base: max vel)
-TagCommandAIChance = 50        ; affects default AI switching probability (used in MvCI ver only)
+TagInTime = 20                 ; tag-in total switch time
+TagInVelX = 12.5               ; tag-in max Vel X
+TagCommandAIChance = 50        ; affects default AI switching probability (range 0-100)
 TagCounterSwitchPower = 1000   ; counter switch power cost (used in MvCI ver only)
 TagRedLifeRegenFrames = 30     ; red life regeneration interval (in frames)
 TagRedLifeRegenPercent = 0.005 ; red life regenerated each interval (percentage of max life)
+TagSwitchCooldown = 0          ; number of ticks the tag switch cooldown lasts
 
 ; Character Reserved Action Numbers
 AnimStanding = 0

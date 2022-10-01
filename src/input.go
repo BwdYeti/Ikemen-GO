@@ -124,11 +124,11 @@ func StringToKey(s string) glfw.Key {
 		return glfw.KeySemicolon
 	case "EQUALS":
 		return glfw.KeyEqual
-	case "LEFTBRACKET":
+	case "LBRACKET":
 		return glfw.KeyLeftBracket
 	case "BACKSLASH":
 		return glfw.KeyBackslash
-	case "RIGHTBRACKET":
+	case "RBRACKET":
 		return glfw.KeyRightBracket
 	case "BACKQUOTE":
 		return glfw.KeyGraveAccent
@@ -365,11 +365,11 @@ func KeyToString(k glfw.Key) string {
 	case glfw.KeyEqual:
 		return "EQUALS"
 	case glfw.KeyLeftBracket:
-		return "LEFTBRACKET"
+		return "LBRACKET"
 	case glfw.KeyBackslash:
 		return "BACKSLASH"
 	case glfw.KeyRightBracket:
-		return "RIGHTBRACKET"
+		return "RBRACKET"
 	case glfw.KeyGraveAccent:
 		return "BACKQUOTE"
 	case glfw.KeyA:
@@ -562,6 +562,7 @@ type ShortcutScript struct {
 	Activate bool
 	Script   string
 	Pause    bool
+	DebugKey bool
 }
 type ShortcutKey struct {
 	Key glfw.Key
@@ -587,8 +588,10 @@ func (sk ShortcutKey) Test(k glfw.Key, m glfw.ModifierKey) bool {
 	return k == sk.Key &&
 		m&(glfw.ModShift|glfw.ModControl|glfw.ModAlt) == sk.Mod
 }
-func keyCallback(_ *glfw.Window, key glfw.Key, _ int,
-	action glfw.Action, mk glfw.ModifierKey) {
+func keyCallback(_ *glfw.Window, key glfw.Key, _ int, action glfw.Action, mk glfw.ModifierKey) {
+	if (key == glfw.KeyUnknown) {
+		return;
+	}
 	switch action {
 	case glfw.Release:
 		sys.keyState[key] = false
@@ -600,7 +603,8 @@ func keyCallback(_ *glfw.Window, key glfw.Key, _ int,
 		sys.esc = sys.esc ||
 			key == glfw.KeyEscape && mk&(glfw.ModControl|glfw.ModAlt) == 0
 		for k, v := range sys.shortcutScripts {
-			if sys.netInput == nil && (!sys.paused || sys.step || v.Pause) {
+			if sys.netInput == nil && (sys.fileInput == nil || !v.DebugKey) &&
+				(!sys.paused || sys.step || v.Pause) && (sys.allowDebugKeys || !v.DebugKey) {
 				v.Activate = v.Activate || k.Test(key, mk)
 			}
 		}
@@ -616,14 +620,6 @@ func keyCallback(_ *glfw.Window, key glfw.Key, _ int,
 func charCallback(_ *glfw.Window, char rune, mk glfw.ModifierKey) {
 	sys.keyString = string(char)
 }
-
-/*func joystickCallback(joy, event glfw.PeripheralEvent) {
-	if event == glfw.Connected {
-		// The joystick was connected
-	} else if event == glfw.Disconnected {
-		// The joystick was disconnected
-	}
-}*/
 
 var joystick = [...]glfw.Joystick{glfw.Joystick1, glfw.Joystick2,
 	glfw.Joystick3, glfw.Joystick4, glfw.Joystick5, glfw.Joystick6,
@@ -1787,8 +1783,7 @@ func (c *Command) Clear() {
 		c.held[i] = false
 	}
 }
-func (c *Command) bufTest(cbuf *CommandBuffer, ai bool,
-	holdTemp *[CK_Last + 1]bool) bool {
+func (c *Command) bufTest(cbuf *CommandBuffer, ai bool, holdTemp *[CK_Last + 1]bool) bool {
 	anyHeld, notHeld := false, 0
 	if len(c.hold) > 0 && !ai {
 		if holdTemp == nil {
@@ -1963,7 +1958,7 @@ func NewCommandList(cb *CommandBuffer) *CommandList {
 	return &CommandList{Buffer: cb, Names: make(map[string]int),
 		DefaultTime: 15, DefaultBufferTime: 1}
 }
-func (cl *CommandList) Input(i int, facing int32, aiLevel float32) bool {
+func (cl *CommandList) Input(i int, facing int32, aiLevel float32, ib InputBits) bool {
 	if cl.Buffer == nil {
 		return false
 	}
@@ -1985,40 +1980,40 @@ func (cl *CommandList) Input(i int, facing int32, aiLevel float32) bool {
 		if i < 0 {
 			i = ^i
 			if i < len(sys.aiInput) {
-				L = sys.aiInput[i].L()
-				R = sys.aiInput[i].R()
-				U = sys.aiInput[i].U()
-				D = sys.aiInput[i].D()
-				a = sys.aiInput[i].a()
-				b = sys.aiInput[i].b()
-				c = sys.aiInput[i].c()
-				x = sys.aiInput[i].x()
-				y = sys.aiInput[i].y()
-				z = sys.aiInput[i].z()
-				s = sys.aiInput[i].s()
-				d = sys.aiInput[i].d()
-				w = sys.aiInput[i].w()
-				m = sys.aiInput[i].m()
+				L = sys.aiInput[i].L() || ib&IB_PL != 0
+				R = sys.aiInput[i].R() || ib&IB_PR != 0
+				U = sys.aiInput[i].U() || ib&IB_PU != 0
+				D = sys.aiInput[i].D() || ib&IB_PD != 0
+				a = sys.aiInput[i].a() || ib&IB_A != 0
+				b = sys.aiInput[i].b() || ib&IB_B != 0
+				c = sys.aiInput[i].c() || ib&IB_C != 0
+				x = sys.aiInput[i].x() || ib&IB_X != 0
+				y = sys.aiInput[i].y() || ib&IB_Y != 0
+				z = sys.aiInput[i].z() || ib&IB_Z != 0
+				s = sys.aiInput[i].s() || ib&IB_S != 0
+				d = sys.aiInput[i].d() || ib&IB_D != 0
+				w = sys.aiInput[i].w() || ib&IB_W != 0
+				m = sys.aiInput[i].m() || ib&IB_M != 0
 			}
 		} else if i < len(sys.inputRemap) {
 			in := sys.inputRemap[i]
 			if in < len(sys.keyConfig) {
 				joy := sys.keyConfig[in].Joy
 				if joy == -1 {
-					L = sys.keyConfig[in].L()
-					R = sys.keyConfig[in].R()
-					U = sys.keyConfig[in].U()
-					D = sys.keyConfig[in].D()
-					a = sys.keyConfig[in].a()
-					b = sys.keyConfig[in].b()
-					c = sys.keyConfig[in].c()
-					x = sys.keyConfig[in].x()
-					y = sys.keyConfig[in].y()
-					z = sys.keyConfig[in].z()
-					s = sys.keyConfig[in].s()
-					d = sys.keyConfig[in].d()
-					w = sys.keyConfig[in].w()
-					m = sys.keyConfig[in].m()
+					L = sys.keyConfig[in].L() || ib&IB_PL != 0
+					R = sys.keyConfig[in].R() || ib&IB_PR != 0
+					U = sys.keyConfig[in].U() || ib&IB_PU != 0
+					D = sys.keyConfig[in].D() || ib&IB_PD != 0
+					a = sys.keyConfig[in].a() || ib&IB_A != 0
+					b = sys.keyConfig[in].b() || ib&IB_B != 0
+					c = sys.keyConfig[in].c() || ib&IB_C != 0
+					x = sys.keyConfig[in].x() || ib&IB_X != 0
+					y = sys.keyConfig[in].y() || ib&IB_Y != 0
+					z = sys.keyConfig[in].z() || ib&IB_Z != 0
+					s = sys.keyConfig[in].s() || ib&IB_S != 0
+					d = sys.keyConfig[in].d() || ib&IB_D != 0
+					w = sys.keyConfig[in].w() || ib&IB_W != 0
+					m = sys.keyConfig[in].m() || ib&IB_M != 0
 				}
 			}
 			if in < len(sys.joystickConfig) {

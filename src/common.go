@@ -109,7 +109,7 @@ func IsFinite(f float32) bool {
 	return math.Abs(float64(f)) <= math.MaxFloat64
 }
 func Atoi(str string) int32 {
-	n := int32(0)
+	var n int64
 	str = strings.TrimSpace(str)
 	if len(str) > 0 {
 		var a string
@@ -122,13 +122,21 @@ func Atoi(str string) int32 {
 			if a[i] < '0' || '9' < a[i] {
 				break
 			}
-			n = n*10 + int32(a[i]-'0')
+			n = n*10 + int64(a[i]-'0')
+			if n > 2147483647 {
+				sys.appendToConsole(fmt.Sprintf("WARNING: Atoi conversion outside int32 range: %v", a[:i+1]))
+				sys.errLog.Printf("Atoi conversion outside int32 range: %v\n", a[:i+1])
+				if str[0] == '-' {
+					return IErr
+				}
+				return IMax
+			}
 		}
 		if str[0] == '-' {
 			n *= -1
 		}
 	}
-	return n
+	return int32(n)
 }
 func Atof(str string) float64 {
 	f := 0.0
@@ -227,8 +235,12 @@ func LoadText(filename string) (string, error) {
 	}
 	return string(bytes), nil
 }
+
 func FileExist(filename string) string {
-	if _, err := os.Stat(filename); !os.IsNotExist(err) {
+	if info, err := os.Stat(filename); !os.IsNotExist(err) {
+		if info == nil || info.IsDir() {
+			return ""
+		}
 		return filename
 	}
 	var pattern string
@@ -248,47 +260,22 @@ func FileExist(filename string) string {
 	return ""
 }
 
-//SearchFile returns the directory that file is located
-//This search on deffile directory, then it keep looking on other dirs
-func SearchFile(file string, deffile string, dirs bool) string {
-	var fp string
+//SearchFile returns full path to specified file
+func SearchFile(file string, dirs []string) string {
 	file = strings.Replace(file, "\\", "/", -1)
-	defdir := filepath.Dir(strings.Replace(deffile, "\\", "/", -1))
-	if defdir == "." || strings.Contains(file, ":/") {
-		fp = file
-	} else if defdir == "/" {
-		fp = "/" + file
-	} else {
-		fp = defdir + "/" + file
-	}
-	if fp = FileExist(fp); len(fp) == 0 && dirs {
-		_else := false
-		if defdir != "data" {
-			fp = "data/" + file
-			if fp = FileExist(fp); len(fp) == 0 {
-				fp = sys.motifDir + file
-				if fp = FileExist(fp); len(fp) == 0 {
-					_else = true
-				}
-			}
-		} else {
-			_else = true
-		}
-		if _else {
-			fp = file
-			if fp = FileExist(fp); len(fp) == 0 {
-				fp = file
-			}
+	for _, v := range dirs {
+		defdir := filepath.Dir(strings.Replace(v, "\\", "/", -1))
+		if fp := FileExist(defdir + "/" + file); len(fp) > 0 {
+			return fp
 		}
 	}
-
-	return fp
+	return file
 }
 
-func LoadFile(file *string, deffile string, load func(string) error) error {
-	fp := SearchFile(*file, deffile, true)
+func LoadFile(file *string, dirs []string, load func(string) error) error {
+	fp := SearchFile(*file, dirs)
 	if err := load(fp); err != nil {
-		return Error(deffile + ":\n" + fp + "\n" + err.Error())
+		return Error(dirs[0] + ":\n" + fp + "\n" + err.Error())
 	}
 	*file = fp
 	return nil
@@ -378,7 +365,7 @@ func SectionName(sec string) (string, string) {
 	return strings.ToLower(name), sec
 }
 func HasExtension(file, ext string) bool {
-	match, _ := regexp.MatchString(ext, filepath.Ext(file))
+	match, _ := regexp.MatchString(ext, filepath.Ext(strings.ToLower(file)))
 	return match
 }
 
@@ -439,13 +426,13 @@ func (is IniSection) Parse(lines []string, i *int) {
 		}
 	}
 }
-func (is IniSection) LoadFile(name, deffile string,
+func (is IniSection) LoadFile(name string, dirs []string,
 	load func(string) error) error {
 	str := is[name]
 	if len(str) == 0 {
 		return nil
 	}
-	return LoadFile(&str, deffile, load)
+	return LoadFile(&str, dirs, load)
 }
 func (is IniSection) ReadI32(name string, out ...*int32) bool {
 	str := is[name]
@@ -569,6 +556,7 @@ type Layout struct {
 	vfacing int8
 	layerno int16
 	scale   [2]float32
+	angle   float32
 	window  [4]int32
 }
 
@@ -600,22 +588,40 @@ func (l *Layout) Read(pre string, is IniSection) {
 	is.ReadI32(pre+"layerno", &ln)
 	l.layerno = I32ToI16(Min(2, ln))
 	is.ReadF32(pre+"scale", &l.scale[0], &l.scale[1])
-	window := sys.scrrect
-	is.ReadI32(pre+"window", &window[0], &window[1], &window[2], &window[3])
-	l.window = [4]int32{window[0], window[1], window[2] - window[0], window[3] - window[1]}
+	is.ReadF32(pre+"angle", &l.angle)
+	if is.ReadI32(pre+"window", &l.window[0], &l.window[1], &l.window[2], &l.window[3]) {
+		l.window[0] = int32(float32(l.window[0]) * float32(sys.scrrect[2]) / float32(sys.lifebarLocalcoord[0]))
+		l.window[1] = int32(float32(l.window[1]) * float32(sys.scrrect[3]) / float32(sys.lifebarLocalcoord[1]))
+		l.window[2] = int32(float32(l.window[2]) * float32(sys.scrrect[2]) / float32(sys.lifebarLocalcoord[0]))
+		l.window[3] = int32(float32(l.window[3]) * float32(sys.scrrect[3]) / float32(sys.lifebarLocalcoord[1]))
+		window := l.window
+		if window[2] < window[0] {
+			l.window[2] = window[0]
+			l.window[0] = window[2]
+		}
+		if window[3] < window[1] {
+			l.window[3] = window[1]
+			l.window[1] = window[3]
+		}
+		l.window[2] -= l.window[0]
+		l.window[3] -= l.window[1]
+	} else {
+		l.window = sys.scrrect
+	}
 }
 func (l *Layout) DrawSprite(x, y float32, ln int16, s *Sprite, fx *PalFX, fscale float32, window *[4]int32) {
 	if l.layerno == ln && s != nil {
 		//TODO: test "phantom pixel"
 		if l.facing < 0 {
-			x += sys.lifebarFontScale * sys.lifebarScale
+			x += sys.lifebar.fnt_scale * sys.lifebarScale
 		}
 		if l.vfacing < 0 {
-			y += sys.lifebarFontScale * sys.lifebarScale
+			y += sys.lifebar.fnt_scale * sys.lifebarScale
 		}
 		paltex := s.PalTex
 		s.Draw(x+l.offset[0]*sys.lifebarScale, y+l.offset[1]*sys.lifebarScale,
-			l.scale[0]*float32(l.facing)*fscale, l.scale[1]*float32(l.vfacing)*fscale, s.Pal, fx, paltex, window)
+			l.scale[0]*float32(l.facing)*fscale, l.scale[1]*float32(l.vfacing)*fscale,
+			l.angle, s.Pal, fx, paltex, window)
 	}
 }
 func (l *Layout) DrawAnim(r *[4]int32, x, y, scl float32, ln int16,
@@ -623,15 +629,15 @@ func (l *Layout) DrawAnim(r *[4]int32, x, y, scl float32, ln int16,
 	if l.layerno == ln {
 		//TODO: test "phantom pixel"
 		if l.facing < 0 {
-			x += sys.lifebarFontScale
+			x += sys.lifebar.fnt_scale
 		}
 		if l.vfacing < 0 {
-			y += sys.lifebarFontScale
+			y += sys.lifebar.fnt_scale
 		}
 		a.Draw(r, x+l.offset[0], y+l.offset[1]+float32(sys.gameHeight-240),
 			scl, scl, l.scale[0]*float32(l.facing), l.scale[0]*float32(l.facing),
-			l.scale[1]*float32(l.vfacing),
-			0, 0, 0, 0, float32(sys.gameWidth-320)/2, palfx, false, 1, false, 1)
+			l.scale[1]*float32(l.vfacing), 0, l.angle, 0, 0,
+			float32(sys.gameWidth-320)/2, palfx, false, 1, false, 1, 0, 0)
 	}
 }
 func (l *Layout) DrawText(x, y, scl float32, ln int16,
@@ -639,14 +645,14 @@ func (l *Layout) DrawText(x, y, scl float32, ln int16,
 	if l.layerno == ln {
 		//TODO: test "phantom pixel"
 		if l.facing < 0 {
-			x += sys.lifebarFontScale
+			x += sys.lifebar.fnt_scale
 		}
 		if l.vfacing < 0 {
-			y += sys.lifebarFontScale
+			y += sys.lifebar.fnt_scale
 		}
 		f.Print(text, (x+l.offset[0])*scl, (y+l.offset[1])*scl,
-			l.scale[0]*sys.lifebarFontScale*float32(l.facing)*scl,
-			l.scale[1]*sys.lifebarFontScale*float32(l.vfacing)*scl, b, a,
+			l.scale[0]*sys.lifebar.fnt_scale*float32(l.facing)*scl,
+			l.scale[1]*sys.lifebar.fnt_scale*float32(l.vfacing)*scl, b, a,
 			&l.window, palfx, frgba)
 	}
 }
@@ -694,12 +700,7 @@ func (al *AnimLayout) Action() {
 	}
 	al.anim.Action()
 }
-func (al *AnimLayout) Draw(x, y float32, layerno int16) {
-	al.lay.DrawAnim(&al.lay.window, x, y, 1, layerno, &al.anim, al.palfx)
-}
-
-// DrawScaled allows to set a custom scale with the draw (For lifebar localcoord)
-func (al *AnimLayout) DrawScaled(x, y float32, layerno int16, scale float32) {
+func (al *AnimLayout) Draw(x, y float32, layerno int16, scale float32) {
 	al.lay.DrawAnim(&al.lay.window, x, y, scale, layerno, &al.anim, al.palfx)
 }
 
@@ -709,7 +710,20 @@ func (al *AnimLayout) ReadAnimPalfx(pre string, is IniSection) {
 	is.ReadI32(pre+"time", &al.palfx.time)
 	is.ReadI32(pre+"add", &al.palfx.add[0], &al.palfx.add[1], &al.palfx.add[2])
 	is.ReadI32(pre+"mul", &al.palfx.mul[0], &al.palfx.mul[1], &al.palfx.mul[2])
-	is.ReadI32(pre+"sinadd", &al.palfx.sinadd[0], &al.palfx.sinadd[1], &al.palfx.sinadd[2], &al.palfx.cycletime)
+	var s [4]int32
+	if is.ReadI32(pre+"sinadd", &s[0], &s[1], &s[2], &s[3]) {
+		if s[3] < 0 {
+			al.palfx.sinadd[0] = -s[0]
+			al.palfx.sinadd[1] = -s[1]
+			al.palfx.sinadd[2] = -s[2]
+			al.palfx.cycletime = -s[3]
+		} else {
+			al.palfx.sinadd[0] = s[0]
+			al.palfx.sinadd[1] = s[1]
+			al.palfx.sinadd[2] = s[2]
+			al.palfx.cycletime = s[3]
+		}
+	}
 	is.ReadBool(pre+"invertall", &al.palfx.invertall)
 	var n float32
 	if is.ReadF32(pre+"color", &n) {
@@ -722,8 +736,7 @@ type AnimTextSnd struct {
 	text        LbText
 	anim        AnimLayout
 	displaytime int32
-	//time        int32
-	//sndtime     int32
+	cnt         int32
 }
 
 func newAnimTextSnd(sff *Sff, ln int16) *AnimTextSnd {
@@ -744,34 +757,26 @@ func (ats *AnimTextSnd) Read(pre string, is IniSection, at AnimationTable,
 	ats.anim.Read(pre, is, at, ln)
 	is.ReadI32(pre+"displaytime", &ats.displaytime)
 }
-func (ats *AnimTextSnd) Reset()  { ats.anim.Reset() }
-func (ats *AnimTextSnd) Action() { ats.anim.Action() }
-
-/*func (ats *AnimTextSnd) Draw(x, y float32, layerno int16, f []*Fnt) {
-	if len(ats.anim.anim.frames) > 0 {
-		ats.anim.Draw(x, y, layerno)
-	} else if ats.text.font[0] >= 0 && int(ats.text.font[0]) < len(f) &&
-		len(ats.text.text) > 0 {
-		for k, v := range strings.Split(ats.text.text, "\\n") {
-			ats.text.lay.DrawText(x, y+
-				float32(k)*(float32(f[ats.text.font[0]].Size[1])*sys.lifebarFontScale+
-					float32(f[ats.text.font[0]].Spacing[1])*sys.lifebarFontScale),
-				1, layerno, v, f[ats.text.font[0]], ats.text.font[1], ats.text.font[2],
-				ats.text.palfx, ats.text.frgba)
-		}
+func (ats *AnimTextSnd) Reset() {
+	ats.anim.Reset()
+	ats.cnt = 0
+}
+func (ats *AnimTextSnd) Action() {
+	ats.anim.Action()
+	ats.cnt++
+}
+func (ats *AnimTextSnd) Draw(x, y float32, layerno int16, f []*Fnt, scale float32) {
+	if ats.displaytime > 0 && ats.cnt > ats.displaytime {
+		return
 	}
-}*/
-
-// DrawScaled it's Draw but with a scaled setting used for lifebar localcoord
-func (ats *AnimTextSnd) DrawScaled(x, y float32, layerno int16, f []*Fnt, scale float32) {
 	if len(ats.anim.anim.frames) > 0 {
-		ats.anim.DrawScaled(x, y, layerno, scale)
+		ats.anim.Draw(x, y, layerno, scale)
 	} else if ats.text.font[0] >= 0 && int(ats.text.font[0]) < len(f) &&
 		len(ats.text.text) > 0 {
 		for k, v := range strings.Split(ats.text.text, "\\n") {
 			ats.text.lay.DrawText(x, y+
-				float32(k)*(float32(f[ats.text.font[0]].Size[1])*ats.text.lay.scale[1]*sys.lifebarFontScale+
-					float32(f[ats.text.font[0]].Spacing[1])*ats.text.lay.scale[1]*sys.lifebarFontScale),
+				float32(k)*(float32(f[ats.text.font[0]].Size[1])*ats.text.lay.scale[1]*sys.lifebar.fnt_scale+
+					float32(f[ats.text.font[0]].Spacing[1])*ats.text.lay.scale[1]*sys.lifebar.fnt_scale),
 				scale, layerno, v, f[ats.text.font[0]], ats.text.font[1], ats.text.font[2], ats.text.palfx,
 				ats.text.frgba)
 		}

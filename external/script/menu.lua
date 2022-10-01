@@ -3,7 +3,88 @@ local menu = {}
 --;===========================================================
 --; PAUSE MENU
 --;===========================================================
+
+-- Associative elements table storing arrays with training menu option names.
+-- Can be appended via external module.
+menu.t_valuename = {
+	dummycontrol = {
+		{itemname = 'cooperative', displayname = motif.training_info.menu_valuename_dummycontrol_cooperative},
+		{itemname = 'ai', displayname = motif.training_info.menu_valuename_dummycontrol_ai},
+		{itemname = 'manual', displayname = motif.training_info.menu_valuename_dummycontrol_manual},
+	},
+	ailevel = {
+		{itemname = '1', displayname = motif.training_info.menu_valuename_ailevel_1},
+		{itemname = '2', displayname = motif.training_info.menu_valuename_ailevel_2},
+		{itemname = '3', displayname = motif.training_info.menu_valuename_ailevel_3},
+		{itemname = '4', displayname = motif.training_info.menu_valuename_ailevel_4},
+		{itemname = '5', displayname = motif.training_info.menu_valuename_ailevel_5},
+		{itemname = '6', displayname = motif.training_info.menu_valuename_ailevel_6},
+		{itemname = '7', displayname = motif.training_info.menu_valuename_ailevel_7},
+		{itemname = '8', displayname = motif.training_info.menu_valuename_ailevel_8},
+	},
+	guardmode = {
+		{itemname = 'none', displayname = motif.training_info.menu_valuename_guardmode_none},
+		{itemname = 'auto', displayname = motif.training_info.menu_valuename_guardmode_auto},
+	},
+	dummymode = {
+		{itemname = 'stand', displayname = motif.training_info.menu_valuename_dummymode_stand},
+		{itemname = 'crouch', displayname = motif.training_info.menu_valuename_dummymode_crouch},
+		{itemname = 'jump', displayname = motif.training_info.menu_valuename_dummymode_jump},
+		{itemname = 'wjump', displayname = motif.training_info.menu_valuename_dummymode_wjump},
+	},
+	distance = {
+		{itemname = 'any', displayname = motif.training_info.menu_valuename_distance_any},
+		{itemname = 'close', displayname = motif.training_info.menu_valuename_distance_close},
+		{itemname = 'medium', displayname = motif.training_info.menu_valuename_distance_medium},
+		{itemname = 'far', displayname = motif.training_info.menu_valuename_distance_far},
+	},
+	buttonjam = {
+		{itemname = 'none', displayname = motif.training_info.menu_valuename_buttonjam_none},
+		{itemname = 'a', displayname = motif.training_info.menu_valuename_buttonjam_a},
+		{itemname = 'b', displayname = motif.training_info.menu_valuename_buttonjam_b},
+		{itemname = 'c', displayname = motif.training_info.menu_valuename_buttonjam_c},
+		{itemname = 'x', displayname = motif.training_info.menu_valuename_buttonjam_x},
+		{itemname = 'y', displayname = motif.training_info.menu_valuename_buttonjam_y},
+		{itemname = 'z', displayname = motif.training_info.menu_valuename_buttonjam_z},
+		{itemname = 's', displayname = motif.training_info.menu_valuename_buttonjam_s},
+		{itemname = 'd', displayname = motif.training_info.menu_valuename_buttonjam_d},
+		{itemname = 'w', displayname = motif.training_info.menu_valuename_buttonjam_w},
+	},
+}
+
+-- Shared logic for training menu option change, returns 2 values:
+-- * boolean depending if option has changed (via right/left button press)
+-- * itemname read from t_valuename table based on currently active option
+--   (or nil, if there was no option change in this frame)
+function menu.f_valueChanged(t, m)
+	local valueitem = menu[t.itemname] or 1
+	local chk = valueitem
+	if main.f_input(main.t_players, {'$F'}) then
+		valueitem = valueitem + 1
+	elseif main.f_input(main.t_players, {'$B'}) then
+		valueitem = valueitem - 1
+	end
+	if valueitem > #menu.t_valuename[t.itemname] then
+		valueitem = 1
+	elseif valueitem < 1 then
+		valueitem = #menu.t_valuename[t.itemname]
+	end
+	-- true upon option change
+	if chk ~= valueitem then
+		sndPlay(motif.files.snd_data, m.cursor_move_snd[1], m.cursor_move_snd[2])
+		t.vardisplay = menu.t_valuename[t.itemname][valueitem].displayname
+		menu[t.itemname] = valueitem
+		menu.itemname = t.itemname
+		return true, menu.t_valuename[t.itemname][valueitem].itemname
+	end
+	return false, nil
+end
+
+-- Current pause menu itemname for internal use (key from menu.t_itemname table)
 menu.itemname = ''
+
+-- Associative elements table storing functions controlling behaviour of each
+-- pause menu item. Can be appended via external module.
 menu.t_itemname = {
 	--Back
 	['back'] = function(t, item, cursorPosY, moveTxt, section)
@@ -17,6 +98,59 @@ menu.t_itemname = {
 			end
 			menu.currentMenu[1] = menu.currentMenu[2]
 			return false
+		end
+		return true
+	end,
+	--Dummy Control
+	['dummycontrol'] = function(t, item, cursorPosY, moveTxt, section)
+		local ok, name = menu.f_valueChanged(t.items[item], motif[section])
+		if ok then
+			if name == 'cooperative' or name == 'manual' then
+				player(2)
+				setAILevel(0)
+			elseif name == 'ai' then
+				player(2)
+				setAILevel(menu.ailevel)
+			end
+			charMapSet(2, '_iksys_trainingDummyControl', menu.dummycontrol - 1)
+		end
+		return true
+	end,
+	--AI Level
+	['ailevel'] = function(t, item, cursorPosY, moveTxt, section)
+		if menu.f_valueChanged(t.items[item], motif[section]) then
+			if menu.t_valuename.dummycontrol[menu.dummycontrol or 1].itemname == 'ai' then
+				player(2)
+				setAILevel(menu.ailevel)
+			end
+		end
+		return true
+	end,
+	--Guard Mode
+	['guardmode'] = function(t, item, cursorPosY, moveTxt, section)
+		if menu.f_valueChanged(t.items[item], motif[section]) then
+			charMapSet(2, '_iksys_trainingGuardMode', menu.guardmode - 1)
+		end
+		return true
+	end,
+	--Dummy Mode
+	['dummymode'] = function(t, item, cursorPosY, moveTxt, section)
+		if menu.f_valueChanged(t.items[item], motif[section]) then
+			charMapSet(2, '_iksys_trainingDummyMode', menu.dummymode - 1)
+		end
+		return true
+	end,
+	--Distance
+	['distance'] = function(t, item, cursorPosY, moveTxt, section)
+		if menu.f_valueChanged(t.items[item], motif[section]) then
+			charMapSet(2, '_iksys_trainingDistance', menu.distance - 1)
+		end
+		return true
+	end,
+	--Button Jam
+	['buttonjam'] = function(t, item, cursorPosY, moveTxt, section)
+		if menu.f_valueChanged(t.items[item], motif[section]) then
+			charMapSet(2, '_iksys_trainingButtonJam', menu.buttonjam - 1)
 		end
 		return true
 	end,
@@ -110,7 +244,15 @@ menu.t_itemname = {
 		return true
 	end,
 }
+-- options.t_itemname table functions are also appended to this table, to make
+-- option screen settings logic accessible from within pause menu.
+for k, v in pairs(options.t_itemname) do
+	if menu.t_itemname[k] == nil then
+		menu.t_itemname[k] = v
+	end
+end
 
+-- Shared menu loop logic
 function menu.f_createMenu(tbl, section, bgdef, txt_title, bool_main)
 	return function()
 		local t = tbl.items
@@ -147,11 +289,45 @@ function menu.f_createMenu(tbl, section, bgdef, txt_title, bool_main)
 	end
 end
 
+menu.t_vardisplayPointers = {}
+
+-- Associative elements table storing functions returning current setting values
+-- rendered alongside menu item name. Can be appended via external module.
+menu.t_vardisplay = {
+	['dummycontrol'] = function()
+		return menu.t_valuename.dummycontrol[menu.dummycontrol or 1].displayname 
+	end,
+	['ailevel'] = function()
+		return menu.t_valuename.ailevel[menu.ailevel or config.Difficulty].displayname 
+	end,
+	['guardmode'] = function()
+		return menu.t_valuename.guardmode[menu.guardmode or 1].displayname 
+	end,
+	['dummymode'] = function()
+		return menu.t_valuename.dummymode[menu.dummymode or 1].displayname 
+	end,
+	['distance'] = function()
+		return menu.t_valuename.distance[menu.distance or 1].displayname 
+	end,
+	['buttonjam'] = function()
+		return menu.t_valuename.buttonjam[menu.buttonjam or 1].displayname 
+	end,
+}
+
+-- Returns setting value rendered alongside menu item name (calls appropriate
+-- function from menu or options t_vardisplay table)
 function menu.f_vardisplay(itemname)
+	if menu.t_vardisplay[itemname] ~= nil then
+		return menu.t_vardisplay[itemname]()
+	end
+	if options.t_vardisplay[itemname] ~= nil then
+		return options.t_vardisplay[itemname]()
+	end
 	return ''
 end
 
---dynamically generates all menus and submenus using itemname data stored in main.t_sort table
+-- Dynamically generates all menus and submenus, iterating over values stored in
+-- main.t_sort table (in order that they're present in system.def).
 for k, v in pairs(
 	{
 		{id = 'menu', section = 'menu_info', bgdef = 'menubgdef', txt_title = 'txt_title_menu'},
@@ -196,6 +372,7 @@ for k, v in pairs(
 							vardisplay = menu.f_vardisplay(c),
 							selected = false,
 						})
+						table.insert(menu.t_vardisplayPointers, menu[v.id].items[#menu[v.id].items])
 					end
 				end
 				t_pos = menu[v.id].submenu[c]
@@ -221,6 +398,7 @@ for k, v in pairs(
 						vardisplay = menu.f_vardisplay(c),
 						selected = false,
 					})
+					table.insert(menu.t_vardisplayPointers, t_pos.items[#t_pos.items])
 				end
 				if j > lastNum then
 					t_pos = t_pos.submenu[c]
@@ -231,6 +409,25 @@ for k, v in pairs(
 		end
 	end
 	if main.debugLog then main.f_printTable(menu[v.id], 'debug/t_' .. v.id .. 'Menu.txt') end
+end
+
+-- Called from global.lua loop() function, at the start of first round, to reset
+-- training menu values and p2 settings for a new match
+function menu.f_trainingReset()
+	for k, _ in pairs(menu.t_valuename) do
+		menu[k] = 1
+	end
+	menu.ailevel = config.Difficulty
+	for _, v in ipairs(menu.t_vardisplayPointers) do
+		v.vardisplay = menu.f_vardisplay(v.itemname)
+	end
+	player(2)
+	setAILevel(0)
+	charMapSet(2, '_iksys_trainingDummyControl', 0)
+	charMapSet(2, '_iksys_trainingGuardMode', 0)
+	charMapSet(2, '_iksys_trainingDummyMode', 0)
+	charMapSet(2, '_iksys_trainingDistance', 0)
+	charMapSet(2, '_iksys_trainingButtonJam', 0)
 end
 
 menu.movelistChar = 1
@@ -371,21 +568,20 @@ function menu.f_commandlistParse()
 end
 
 for _, v in ipairs({'menu_info', 'training_info'}) do
-	menu[v .. '_txt_title'] = main.f_createTextImg(motif[v], 'movelist_title', {defsc = motif.defaultMenu, addX = motif[v].movelist_pos[1], addY = motif[v].movelist_pos[2]})
-	menu[v .. '_txt_text'] = main.f_createTextImg(motif[v], 'movelist_text', {defsc = motif.defaultMenu, addX = motif[v].movelist_pos[1], addY = motif[v].movelist_pos[2]})
+	menu[v .. '_txt_title'] = main.f_createTextImg(motif[v], 'movelist_title', {defsc = motif.defaultMenu, x = motif[v].movelist_pos[1], y = motif[v].movelist_pos[2]})
+	menu[v .. '_txt_text'] = main.f_createTextImg(motif[v], 'movelist_text', {defsc = motif.defaultMenu, x = motif[v].movelist_pos[1], y = motif[v].movelist_pos[2]})
 	menu[v .. '_overlay'] = main.f_createOverlay(motif[v], 'overlay')
 	menu[v .. '_movelist_overlay'] = main.f_createOverlay(motif[v], 'movelist_overlay')
 	--menu[v .. '_t_movelistWindow'] = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}
 	if motif[v].movelist_window_margins_y[1] ~= 0 or motif[v].movelist_window_margins_y[2] ~= 0 then
 		local data = menu[v .. '_txt_text']
-		local font_def = main.font_def[motif[v].movelist_text_font[1] .. motif[v].movelist_text_font_height]
+		local font_def = main.font_def[motif[v].movelist_text_font[1] .. motif[v].movelist_text_font[7]]
 		menu[v .. '_t_movelistWindow'] = {
 			0,
 			math.max(0, motif[v].movelist_pos[2] + motif[v].movelist_text_offset[2] - motif[v].movelist_window_margins_y[1]),
 			motif[v].movelist_pos[1] + motif[v].movelist_text_offset[1] + motif[v].movelist_window_width,
 			motif[v].movelist_pos[2] + motif[v].movelist_text_offset[2] + (motif[v].movelist_window_visibleitems - 1) * main.f_round((font_def.Size[2] + font_def.Spacing[2]) * data.scaleY + motif[v].movelist_text_spacing[2]) + motif[v].movelist_window_margins_y[2] + math.max(0, motif[v].movelist_glyphs_offset[2])
 		}
-
 	end
 	menu[v .. '_txt_text']:update({window = menu[v .. '_t_movelistWindow']})
 end
@@ -454,33 +650,35 @@ function menu.f_commandlistRender(section, t)
 					align = v.align
 				end
 				local data = menu[section .. '_txt_text']
-				local font_def = main.font_def[motif[section].movelist_text_font[1] .. motif[section].movelist_text_font_height]
+				local font_def = main.font_def[motif[section].movelist_text_font[1] .. motif[section].movelist_text_font[7]]
 				--render glyph
 				if v.glyph and motif.glyphs_data[v.text] ~= nil then
-					local scaleX = font_def.Size[2] * motif[section].movelist_text_font_scale[2] / motif.glyphs_data[v.text].info.Size[2] * motif[section].movelist_glyphs_scale[1]
-					local scaleY = font_def.Size[2] * motif[section].movelist_text_font_scale[2] / motif.glyphs_data[v.text].info.Size[2] * motif[section].movelist_glyphs_scale[2]
-					if v.align == -1 then
-						alignOffset = alignOffset - motif.glyphs_data[v.text].info.Size[1] * scaleX
-					end
-					if motif.defaultMenu then main.f_disableLuaScale() end
-					animSetScale(motif.glyphs_data[v.text].anim, scaleX, scaleY)
-					animSetPos(
-						motif.glyphs_data[v.text].anim,
-						math.floor(motif[section].movelist_pos[1] + motif[section].movelist_text_offset[1] + motif[section].movelist_glyphs_offset[1] + alignOffset + lengthOffset),
-						motif[section].movelist_pos[2] + motif[section].movelist_text_offset[2] + motif[section].movelist_glyphs_offset[2] + main.f_round((font_def.Size[2] + font_def.Spacing[2]) * data.scaleY + motif[section].movelist_text_spacing[2]) * (i - 1)
-					)
-					animSetWindow(
-						motif.glyphs_data[v.text].anim,
-						menu[section .. '_t_movelistWindow'][1],
-						menu[section .. '_t_movelistWindow'][2],
-						menu[section .. '_t_movelistWindow'][3] - menu[section .. '_t_movelistWindow'][1],
-						menu[section .. '_t_movelistWindow'][4] - menu[section .. '_t_movelistWindow'][2]
-					)
-					--animUpdate(motif.glyphs_data[v.text].anim)
-					animDraw(motif.glyphs_data[v.text].anim)
-					if motif.defaultMenu then main.f_setLuaScale() end
-					if k < #cmdList[n] then
-						width = motif.glyphs_data[v.text].info.Size[1] * scaleX + motif[section].movelist_glyphs_spacing[1]
+					if motif.glyphs_data[v.text].info ~= nil then
+						local scaleX = font_def.Size[2] * motif[section].movelist_text_scale[2] / motif.glyphs_data[v.text].info.Size[2] * motif[section].movelist_glyphs_scale[1]
+						local scaleY = font_def.Size[2] * motif[section].movelist_text_scale[2] / motif.glyphs_data[v.text].info.Size[2] * motif[section].movelist_glyphs_scale[2]
+						if v.align == -1 then
+							alignOffset = alignOffset - motif.glyphs_data[v.text].info.Size[1] * scaleX
+						end
+						if motif.defaultMenu then main.f_disableLuaScale() end
+						animSetScale(motif.glyphs_data[v.text].anim, scaleX, scaleY)
+						animSetPos(
+							motif.glyphs_data[v.text].anim,
+							math.floor(motif[section].movelist_pos[1] + motif[section].movelist_text_offset[1] + motif[section].movelist_glyphs_offset[1] + alignOffset + lengthOffset),
+							motif[section].movelist_pos[2] + motif[section].movelist_text_offset[2] + motif[section].movelist_glyphs_offset[2] + main.f_round((font_def.Size[2] + font_def.Spacing[2]) * data.scaleY + motif[section].movelist_text_spacing[2]) * (i - 1)
+						)
+						animSetWindow(
+							motif.glyphs_data[v.text].anim,
+							menu[section .. '_t_movelistWindow'][1],
+							menu[section .. '_t_movelistWindow'][2],
+							menu[section .. '_t_movelistWindow'][3] - menu[section .. '_t_movelistWindow'][1],
+							menu[section .. '_t_movelistWindow'][4] - menu[section .. '_t_movelistWindow'][2]
+						)
+						--animUpdate(motif.glyphs_data[v.text].anim)
+						animDraw(motif.glyphs_data[v.text].anim)
+						if motif.defaultMenu then main.f_setLuaScale() end
+						if k < #cmdList[n] then
+							width = motif.glyphs_data[v.text].info.Size[1] * scaleX + motif[section].movelist_glyphs_spacing[1]
+						end
 					end
 				--render text
 				else
@@ -495,7 +693,7 @@ function menu.f_commandlistRender(section, t)
 					})
 					data:draw()
 					if k < #cmdList[n] then
-						width = fontGetTextWidth(main.font[data.font .. data.height], v.text) * motif[section].movelist_text_font_scale[1] + motif[section].movelist_text_spacing[1]
+						width = fontGetTextWidth(main.font[data.font .. data.height], v.text, data.bank) * motif[section].movelist_text_scale[1] + motif[section].movelist_text_spacing[1]
 					end
 				end
 				if v.align == 0 then
