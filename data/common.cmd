@@ -1,4 +1,9 @@
 [Command]
+name = "recovery"
+command = 
+time = 1
+
+[Command]
 name = "TagShiftBack"
 command = d
 time = 1
@@ -56,4 +61,29 @@ time = 1
 [Command]
 name = "m"
 command = m
+time = 1
+
+[Command]
+name = "menu"
+command = m
+time = 1
+
+[Command]
+name = "holdfwd"
+command = /$F
+time = 1
+
+[Command]
+name = "holdback"
+command = /$B
+time = 1
+
+[Command]
+name = "holdup"
+command = /$U
+time = 1
+
+[Command]
+name = "holddown"
+command = /$D
 time = 1

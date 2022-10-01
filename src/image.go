@@ -9,10 +9,9 @@ import (
 	"io"
 	"math"
 	"os"
-	"runtime"
 	"unsafe"
 
-	"github.com/go-gl/gl/v2.1/gl"
+	gl "github.com/fyne-io/gl-js"
 )
 
 type TransType int32
@@ -25,23 +24,6 @@ const (
 	TT_add1
 	TT_sub
 )
-
-type Texture uint32
-
-func newTexture() (t *Texture) {
-	t = new(Texture)
-	gl.GenTextures(1, (*uint32)(t))
-	runtime.SetFinalizer(t, (*Texture).finalizer)
-	return
-}
-func (t *Texture) finalizer() {
-	if *t != 0 {
-		tex := *t
-		sys.mainThreadTask <- func() {
-			gl.DeleteTextures(1, (*uint32)(&tex))
-		}
-	}
-}
 
 type PalFXDef struct {
 	time      int32
@@ -111,7 +93,7 @@ func (pf *PalFX) getFxPal(pal []uint32, neg bool) []uint32 {
 			su = uint32(-Max(-255, a[i]))
 			a[i] = 0
 		}
-		m[i] = Max(0, Min(255*256, m[i]))
+		m[i] = Clamp(m[i], 0, 255*256)
 		a[i] = Min(255*256*256/Max(1, m[i]), a[i])
 		sub |= su << uint(i*8)
 	}
@@ -135,12 +117,12 @@ func (pf *PalFX) getFxPal(pal []uint32, neg bool) []uint32 {
 	}
 	return sys.workpal
 }
-func (pf *PalFX) getFcPalFx(transNeg bool) (neg bool, color float32,
+func (pf *PalFX) getFcPalFx(transNeg bool) (neg bool, grayscale float32,
 	add, mul [3]float32) {
 	p := pf.getSynFx()
 	if !p.enable {
 		neg = false
-		color = 1
+		grayscale = 0
 		for i := range add {
 			add[i] = 0
 		}
@@ -150,7 +132,7 @@ func (pf *PalFX) getFcPalFx(transNeg bool) (neg bool, color float32,
 		return
 	}
 	neg = p.eInvertall
-	color = p.eColor
+	grayscale = 1 - p.eColor
 	if !p.eNegType {
 		transNeg = false
 	}
@@ -206,9 +188,9 @@ func (pf *PalFX) synthesize(pfx PalFX) {
 }
 
 func (pf *PalFX) setColor(r, g, b int32) {
-	rNormalized := Max(0, Min(255, r))
-	gNormalized := Max(0, Min(255, g))
-	bNormalized := Max(0, Min(255, b))
+	rNormalized := Clamp(r, 0, 255)
+	gNormalized := Clamp(g, 0, 255)
+	bNormalized := Clamp(b, 0, 255)
 
 	pf.enable = true
 	pf.eColor = 1
@@ -223,6 +205,7 @@ type PaletteList struct {
 	palettes   [][]uint32
 	paletteMap []int
 	PalTable   map[[2]int16]int
+	numcols    map[[2]int16]int
 	PalTex     []*Texture
 }
 
@@ -230,6 +213,7 @@ func (pl *PaletteList) init() {
 	pl.palettes = nil
 	pl.paletteMap = nil
 	pl.PalTable = make(map[[2]int16]int)
+	pl.numcols = make(map[[2]int16]int)
 	pl.PalTex = nil
 }
 func (pl *PaletteList) SetSource(i int, p []uint32) {
@@ -278,6 +262,12 @@ func (pl *PaletteList) SwapPalMap(palMap *[]int) bool {
 	}
 	*palMap, pl.paletteMap = pl.paletteMap, *palMap
 	return true
+}
+
+func PaletteToTexture(pal []uint32) *Texture {
+	tx := newTexture(256, 1, 32)
+	tx.SetData(unsafe.Slice((*byte)(unsafe.Pointer(&pal[0])), len(pal) * 4), false)
+	return tx
 }
 
 type SffHeader struct {
@@ -369,6 +359,7 @@ type Sprite struct {
 	Offset        [2]int16
 	palidx        int
 	rle           int
+	coldepth      byte
 	paltemp       []uint32
 	PalTex        *Texture
 }
@@ -464,7 +455,7 @@ func newSprite() *Sprite {
 		s.palidx = -1
 		return s, nil
 	}
-	if s.rle > -11 {
+	if s.coldepth <= 8 {
 		read := func(x interface{}) error {
 			return binary.Read(f, binary.LittleEndian, x)
 		}
@@ -508,22 +499,23 @@ func (s *Sprite) shareCopy(src *Sprite) {
 	if s.palidx < 0 {
 		s.palidx = src.palidx
 	}
-	s.rle = src.rle
+	s.coldepth = src.coldepth
 	//s.paltemp = src.paltemp
 	//s.PalTex = src.PalTex
 }
 func (s *Sprite) GetPal(pl *PaletteList) []uint32 {
-	if s.Pal != nil || s.rle <= -11 {
+	if s.Pal != nil || s.coldepth > 8 {
 		return s.Pal
 	}
 	return pl.Get(int(s.palidx)) //pl.palettes[pl.paletteMap[int(s.palidx)]]
 }
 func (s *Sprite) GetPalTex(pl *PaletteList) *Texture {
-	if s.rle <= -11 {
+	if s.coldepth > 8 {
 		return nil
 	}
 	return pl.PalTex[pl.paletteMap[int(s.palidx)]]
 }
+
 func (s *Sprite) SetPxl(px []byte) {
 	if len(px) == 0 {
 		return
@@ -532,20 +524,18 @@ func (s *Sprite) SetPxl(px []byte) {
 		return
 	}
 	sys.mainThreadTask <- func() {
-		gl.Enable(gl.TEXTURE_2D)
-		s.Tex = newTexture()
-		gl.BindTexture(gl.TEXTURE_2D, uint32(*s.Tex))
-		gl.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
-		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE,
-			int32(s.Size[0]), int32(s.Size[1]),
-			0, gl.LUMINANCE, gl.UNSIGNED_BYTE, unsafe.Pointer(&px[0]))
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP)
-		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP)
-		gl.Disable(gl.TEXTURE_2D)
+		s.Tex = newTexture(int32(s.Size[0]), int32(s.Size[1]), 8)
+		s.Tex.SetData(px, false)
 	}
 }
+
+func (s *Sprite) SetRaw(data []byte, sprWidth int32, sprHeight int32, sprDepth int32) {
+	sys.mainThreadTask <- func() {
+		s.Tex = newTexture(sprWidth, sprHeight, sprDepth)
+		s.Tex.SetData(data, sys.pngFilter)
+	}
+}
+
 func (s *Sprite) readHeader(r io.Reader, ofs, size *uint32,
 	link *uint16) error {
 	read := func(x interface{}) error {
@@ -588,7 +578,7 @@ func (s *Sprite) readPcxHeader(f *os.File, offset int64) error {
 		return err
 	}
 	if bpp != 8 {
-		return Error("Not 256 colors")
+		return Error(fmt.Sprintf("Invalid PCX color depth: expected 8-bit, got %v", bpp))
 	}
 	var rect [4]uint16
 	if err := read(rect[:]); err != nil {
@@ -721,8 +711,7 @@ func (s *Sprite) readHeaderV2(r io.Reader, ofs *uint32, size *uint32,
 		return err
 	}
 	s.rle = -int(format)
-	var dummy byte
-	if err := read(&dummy); err != nil {
+	if err := read(&s.coldepth); err != nil {
 		return err
 	}
 	if err := read(ofs); err != nil {
@@ -893,10 +882,34 @@ func (s *Sprite) Lz5Decode(rle []byte) (p []byte) {
 	return
 }
 func (s *Sprite) readV2(f *os.File, offset int64, datasize uint32) error {
-	f.Seek(offset+4, 0)
-	if s.rle < 0 {
+	var px []byte
+	var isRaw bool = false
+
+	if s.rle > 0 {
+		return nil
+
+	} else if s.rle == 0 {
+		f.Seek(offset, 0)
+		px = make([]uint8, datasize)
+		binary.Read(f, binary.LittleEndian, px)
+
+		switch s.coldepth {
+		case 8:
+			// Do nothing, px is already in the expected format
+		case 24, 32:
+			isRaw = true
+			s.SetRaw(px, int32(s.Size[0]), int32(s.Size[1]), int32(s.coldepth))
+		default:
+			return Error("Unknown color depth")
+		}
+
+	} else {
+		f.Seek(offset+4, 0)
 		format := -s.rle
-		var px []byte
+
+		var rgba *image.RGBA
+		var rect image.Rectangle
+
 		if 2 <= format && format <= 4 {
 			if datasize < 4 {
 				datasize = 4
@@ -907,6 +920,7 @@ func (s *Sprite) readV2(f *os.File, offset int64, datasize uint32) error {
 				//return err
 			}
 		}
+
 		switch format {
 		case 2:
 			px = s.Rle8Decode(px)
@@ -924,110 +938,57 @@ func (s *Sprite) readV2(f *os.File, offset int64, datasize uint32) error {
 				px = pi.Pix
 			}
 		case 11, 12:
+			var ok bool = false
+			isRaw = true
+
+			// Decode PNG image to RGBA
 			img, err := png.Decode(f)
 			if err != nil {
 				return err
 			}
-			rect := img.Bounds()
-			rgba, ok := img.(*image.RGBA)
+
+			rect = img.Bounds()
+			rgba, ok = img.(*image.RGBA)
+
 			if !ok {
 				rgba = image.NewRGBA(rect)
 				draw.Draw(rgba, rect, img, rect.Min, draw.Src)
 			}
-			// TODO: Check why ths channel operation uses too much memory.
-			sys.mainThreadTask <- func() {
-				gl.Enable(gl.TEXTURE_2D)
-				s.Tex = newTexture()
-				gl.BindTexture(gl.TEXTURE_2D, uint32(*s.Tex))
-				gl.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
-				gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA, int32(rect.Max.X-rect.Min.X),
-					int32(rect.Max.Y-rect.Min.Y), 0, gl.RGBA, gl.UNSIGNED_BYTE,
-					unsafe.Pointer(&rgba.Pix[0]))
-				if sys.pngFilter {
-					gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-					gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-				} else {
-					gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-					gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-				}
-				gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-				gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-				gl.Disable(gl.TEXTURE_2D)
-			}
-			return nil
+			s.SetRaw(rgba.Pix, int32(rect.Max.X-rect.Min.X), int32(rect.Max.Y-rect.Min.Y), 32)
 		default:
 			return Error("Unknown format")
 		}
+	}
+
+	if !isRaw {
 		s.SetPxl(px)
 	}
 	return nil
 }
-func (s *Sprite) glDraw(pal []uint32, mask int32, x, y float32, tile *[4]int32,
-	xts, xbs, ys, rxadd, agl, yagl, xagl float32, trans int32, window *[4]int32,
-	rcx, rcy float32, pfx *PalFX, paltex *Texture) {
-	if s.Tex == nil {
-		return
-	}
-	neg, color, padd, pmul := pfx.getFcPalFx(trans == -2)
-	if trans == -2 {
-		padd[0] *= -1
-		padd[1] *= -1
-		padd[2] *= -1
-	}
 
-	if s.rle <= -11 {
-		RenderMugenFc(*s.Tex, s.Size, x, y, tile, xts, xbs, ys, 1, rxadd, agl, yagl, xagl,
-			trans, window, rcx, rcy, neg, color, &padd, &pmul)
+// Cache the provided palette data in a sprite. But first check if the
+// previously stored one is still valid.
+func (s *Sprite) CachePalette(pal []uint32) *Texture {
+	hasPalette := true
+	if s.PalTex == nil || len(pal) != len(s.paltemp) {
+		hasPalette = false
 	} else {
-		//読み込み済みパレットの情報が渡されてるか //Is the loaded palette information passed?
-		if paltex != nil {
-			gl.ActiveTexture(gl.TEXTURE1)
-			gl.BindTexture(gl.TEXTURE_1D, uint32(*paltex))
-			RenderMugenPal(*s.Tex, mask, s.Size, x, y, tile, xts, xbs, ys, 1,
-				rxadd, agl, yagl, xagl, trans, window, rcx, rcy, neg, color, &padd, &pmul)
-			gl.Disable(gl.TEXTURE_1D)
-			return
-		}
-		//無い場合暫定の方法でパレットテクスチャ生成 / If not, generate palette texture by provisional method
-		PalEqual := true
-		if len(pal) != len(s.paltemp) {
-			PalEqual = false
-		} else {
-			for i := range pal {
-				if pal[i] != s.paltemp[i] {
-					PalEqual = false
-					break
-				}
+		for i := range pal {
+			if pal[i] != s.paltemp[i] {
+				hasPalette = false
+				break
 			}
-		}
-		if PalEqual {
-			if s.PalTex == nil {
-				return
-			}
-			gl.ActiveTexture(gl.TEXTURE1)
-			gl.BindTexture(gl.TEXTURE_1D, uint32(*s.PalTex))
-			RenderMugenPal(*s.Tex, mask, s.Size, x, y, tile, xts, xbs, ys, 1,
-				rxadd, agl, yagl, xagl, trans, window, rcx, rcy, neg, color, &padd, &pmul)
-			gl.Disable(gl.TEXTURE_1D)
-		} else {
-			gl.Enable(gl.TEXTURE_1D)
-			gl.ActiveTexture(gl.TEXTURE1)
-			s.PalTex = newTexture()
-			gl.BindTexture(gl.TEXTURE_1D, uint32(*s.PalTex))
-			gl.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
-			gl.TexImage1D(gl.TEXTURE_1D, 0, gl.RGBA, 256, 0, gl.RGBA, gl.UNSIGNED_BYTE,
-				unsafe.Pointer(&pal[0]))
-			gl.TexParameteri(gl.TEXTURE_1D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-			gl.TexParameteri(gl.TEXTURE_1D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-			tmp := append([]uint32{}, pal...)
-			s.paltemp = tmp
-			RenderMugenPal(*s.Tex, mask, s.Size, x, y, tile, xts, xbs, ys, 1,
-				rxadd, agl, yagl, xagl, trans, window, rcx, rcy, neg, color, &padd, &pmul)
-			gl.Disable(gl.TEXTURE_1D)
 		}
 	}
+	// If cached texture is invalid, generate a new one
+	if !hasPalette {
+		s.PalTex = PaletteToTexture(pal)
+		s.paltemp = append([]uint32{}, pal...)
+	}
+	return s.PalTex
 }
-func (s *Sprite) Draw(x, y, xscale, yscale float32, pal []uint32, fx *PalFX, paltex *Texture, window *[4]int32) {
+
+func (s *Sprite) Draw(x, y, xscale, yscale, angle float32, fx *PalFX, window *[4]int32) {
 	x += float32(sys.gameWidth-320)/2 - xscale*float32(s.Offset[0])
 	y += float32(sys.gameHeight-240) - yscale*float32(s.Offset[1])
 	if xscale < 0 {
@@ -1036,9 +997,14 @@ func (s *Sprite) Draw(x, y, xscale, yscale float32, pal []uint32, fx *PalFX, pal
 	if yscale < 0 {
 		y *= -1
 	}
-	s.glDraw(pal, 0, -x*sys.widthScale, -y*sys.heightScale, &notiling,
-		xscale*sys.widthScale, xscale*sys.widthScale, yscale*sys.heightScale, 0, 0, 0, 0,
-		sys.brightness*255>>8|1<<9, window, 0, 0, fx, paltex)
+	rp := RenderParams{
+		s.Tex, s.PalTex, s.Size,
+		-x*sys.widthScale, -y*sys.heightScale, notiling,
+		xscale*sys.widthScale, xscale*sys.widthScale, yscale*sys.heightScale, 1, 0,
+		Rotation{angle, 0, 0}, 0, sys.brightness*255>>8|1<<9, 0, fx, window, 0, 0, 0, 0,
+		-xscale*float32(s.Offset[0]), -yscale*float32(s.Offset[1]),
+	}
+	RenderSprite(rp)
 }
 
 type Sff struct {
@@ -1093,7 +1059,6 @@ func loadSff(filename string, char bool) (*Sff, error) {
 			if old, ok := uniquePals[[...]int16{gn_[0], gn_[1]}]; ok {
 				idx = old
 				pal = s.palList.Get(old)
-				sys.appendToConsole(fmt.Sprintf("WARNING: %v duplicated palette: %v,%v (%v/%v)", filename, gn_[0], gn_[1], i+1, s.header.NumberOfPalettes))
 				sys.errLog.Printf("%v duplicated palette: %v,%v (%v/%v)\n", filename, gn_[0], gn_[1], i+1, s.header.NumberOfPalettes)
 			} else if siz == 0 {
 				idx = int(link)
@@ -1116,6 +1081,7 @@ func loadSff(filename string, char bool) (*Sff, error) {
 			uniquePals[[...]int16{gn_[0], gn_[1]}] = idx
 			s.palList.SetSource(i, pal)
 			s.palList.PalTable[[...]int16{gn_[0], gn_[1]}] = idx
+			s.palList.numcols[[...]int16{gn_[0], gn_[1]}] = int(gn_[2])
 			if i <= MaxPalNo &&
 				s.palList.PalTable[[...]int16{1, int16(i + 1)}] == s.palList.PalTable[[...]int16{gn_[0], gn_[1]}] &&
 				gn_[0] != 1 && gn_[1] != int16(i+1) {
@@ -1213,13 +1179,10 @@ func preloadSff(filename string, char bool, preloadSpr map[[2]int16]bool) (*Sff,
 	pl.init()
 	spriteList := make([]*Sprite, int(h.NumberOfSprites))
 	var prev *Sprite
-	var newSubHeaderOffset []uint32
-	newSubHeaderOffset = append(newSubHeaderOffset, shofs)
 	preloadSprNum := len(preloadSpr)
 	preloadRef := make(map[int]bool)
 	for i := 0; i < len(spriteList); i++ {
 		spriteList[i] = newSprite()
-		newSubHeaderOffset = append(newSubHeaderOffset, shofs)
 		f.Seek(int64(shofs), 0)
 		switch h.Ver0 {
 		case 1:
@@ -1270,7 +1233,7 @@ func preloadSff(filename string, char bool, preloadSpr map[[2]int16]bool) (*Sff,
 						if spriteList[i].palidx >= MaxPalNo { //just in case
 							spriteList[i].palidx = 0
 						}
-					} else if spriteList[i].rle > -11 {
+					} else if spriteList[i].coldepth <= 8 {
 						plSize = 0
 						plIndexOfPrevious = uint16(spriteList[i].palidx)
 						ip := plIndexOfPrevious + 1
@@ -1360,11 +1323,12 @@ func (s *Sff) getOwnPalSprite(g, n int16) *Sprite {
 	return &osp
 }
 func captureScreen() {
-	width, height := sys.window.Window.GetSize()
+	width, height := sys.window.GetSize()
 	pixdata := make([]uint8, 4*width*height)
 	img := image.NewNRGBA(image.Rect(0, 0, width, height))
-	unbindFB()
-	gl.ReadPixels(0, 0, int32(width), int32(height), gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(pixdata))
+	renderer.EndFrame()
+	gl.ReadPixels(pixdata, 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE)
+	renderer.BeginFrame()
 	for i := 0; i < 4*width*height; i++ {
 		var x, y, j int
 		x = i % (width * 4)
@@ -1375,17 +1339,10 @@ func captureScreen() {
 		}
 		img.Pix[j] = pixdata[i]
 	}
-	var filename string
 	for i := sys.captureNum; i < 999; i++ {
-		if i < 10 {
-			filename = fmt.Sprintf("ikemen00%d.png", i)
-		} else if i < 100 {
-			filename = fmt.Sprintf("ikemen0%d.png", i)
-		} else {
-			filename = fmt.Sprintf("ikemen%d.png", i)
-		}
-		if _, err := os.Stat(sys.screenshotFolder + filename); os.IsNotExist(err) {
-			file, _ := os.Create(sys.screenshotFolder + filename)
+		filename := fmt.Sprintf("%sikemen%03d.png", sys.screenshotFolder, i)
+		if _, err := os.Stat(filename); os.IsNotExist(err) {
+			file, _ := os.Create(filename)
 			defer file.Close()
 			png.Encode(file, img)
 			sys.captureNum = i
