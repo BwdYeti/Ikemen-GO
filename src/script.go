@@ -918,12 +918,12 @@ func systemScriptInit(l *lua.LState) {
 					if sys.tmode[1] == TM_Turns {
 						sys.matchWins[0] = sys.numTurns[1]
 					} else {
-						sys.matchWins[0] = sys.lifebar.ro.match_wins[1]
+						sys.matchWins[0] = sys.gs.lb.ro.match_wins[1]
 					}
 					if sys.tmode[0] == TM_Turns {
 						sys.matchWins[1] = sys.numTurns[0]
 					} else {
-						sys.matchWins[1] = sys.lifebar.ro.match_wins[0]
+						sys.matchWins[1] = sys.gs.lb.ro.match_wins[0]
 					}
 					sys.teamLeader = [...]int{0, 1}
 					sys.stage.reset()
@@ -1399,7 +1399,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		l.Push(lua.LNumber(sys.lifebar.ro.match_maxdrawgames[tn-1]))
+		l.Push(lua.LNumber(sys.gs.lb.ro.match_maxdrawgames[tn-1]))
 		return 1
 	})
 	luaRegister(l, "getMatchWins", func(l *lua.LState) int {
@@ -1407,7 +1407,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		l.Push(lua.LNumber(sys.lifebar.ro.match_wins[tn-1]))
+		l.Push(lua.LNumber(sys.gs.lb.ro.match_wins[tn-1]))
 		return 1
 	})
 	luaRegister(l, "getRoundTime", func(l *lua.LState) int {
@@ -1474,11 +1474,12 @@ func systemScriptInit(l *lua.LState) {
 		return 1
 	})
 	luaRegister(l, "loadLifebar", func(l *lua.LState) int {
-		lb, err := loadLifebar(strArg(l, 1))
+		lb, lbv, err := loadLifebar(strArg(l, 1))
 		if err != nil {
 			l.RaiseError("\nCan't load %v: %v\n", strArg(l, 1), err.Error())
 		}
 		sys.lifebar = *lb
+		sys.gs.lb = *lbv
 		return 0
 	})
 	luaRegister(l, "loadStart", func(l *lua.LState) int {
@@ -2098,7 +2099,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		sys.lifebar.ro.match_maxdrawgames[tn-1] = int32(numArg(l, 2))
+		sys.gs.lb.ro.match_maxdrawgames[tn-1] = int32(numArg(l, 2))
 		return 0
 	})
 	luaRegister(l, "setMatchNo", func(l *lua.LState) int {
@@ -2110,7 +2111,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		sys.lifebar.ro.match_wins[tn-1] = int32(numArg(l, 2))
+		sys.gs.lb.ro.match_wins[tn-1] = int32(numArg(l, 2))
 		return 0
 	})
 	luaRegister(l, "setMaxAfterImage", func(l *lua.LState) int {

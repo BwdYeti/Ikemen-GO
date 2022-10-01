@@ -51,10 +51,26 @@ func (acv *LifeBarActionValues) clone() (result *LifeBarActionValues) {
 	return
 }
 
+type LifeBarRoundValues struct {
+	match_wins         [2]int32
+	match_maxdrawgames [2]int32
+	cur                int32
+	wt, swt, dt        [4]int32
+	timerActive        bool
+	introState         [2]bool
+	firstAttack        [2]bool
+}
+
+func newLifeBarRoundValues() *LifeBarRoundValues {
+	return &LifeBarRoundValues{match_wins: [...]int32{2, 2},
+		match_maxdrawgames: [...]int32{1, 1}}
+}
+
 type LifebarValues struct {
 	hb [8][]HealthBarValues
 	co [2]LifeBarComboValues
 	ac [2]LifeBarActionValues
+	ro LifeBarRoundValues
 }
 
 func (lbv *LifebarValues) clone() (result *LifebarValues) {

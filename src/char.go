@@ -3005,7 +3005,7 @@ func (c *Char) roundState() int32 {
 		return -1
 	case sys.intro > sys.lifebar.ro.ctrl_time+1:
 		return 0
-	case sys.lifebar.ro.cur == 0:
+	case sys.gs.lb.ro.cur == 0:
 		return 1
 	case sys.intro >= 0 || sys.finish == FT_NotYet:
 		return 2
@@ -6578,7 +6578,7 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 				if getter.ss.moveType == MT_A {
 					c.counterHit = true
 				}
-				if !sys.lifebar.ro.firstAttack[0] && !sys.lifebar.ro.firstAttack[1] &&
+				if !sys.gs.lb.ro.firstAttack[0] && !sys.gs.lb.ro.firstAttack[1] &&
 					ghvset && getter.hoIdx < 0 && c.teamside != -1 {
 					ts := c.teamside
 					pn := c.playerNo
@@ -6586,7 +6586,7 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 						ts = getter.teamside
 						pn = getter.playerNo
 					}
-					sys.lifebar.ro.firstAttack[ts] = true
+					sys.gs.lb.ro.firstAttack[ts] = true
 					sys.getChar(pn, 0).firstAttack = true
 				}
 				if !math.IsNaN(float64(hd.score[0])) {

@@ -913,11 +913,11 @@ func (s *System) nextRound() {
 	s.gs.time = s.roundTime
 	s.nextCharId = s.helperMax
 	if (s.tmode[0] == TM_Turns && s.wins[1] == s.numTurns[0]-1) ||
-		(s.tmode[0] != TM_Turns && s.wins[1] == s.lifebar.ro.match_wins[0]-1) {
+		(s.tmode[0] != TM_Turns && s.wins[1] == s.gs.lb.ro.match_wins[0]-1) {
 		s.roundType[0] = RT_Deciding
 	}
 	if (s.tmode[1] == TM_Turns && s.wins[0] == s.numTurns[1]-1) ||
-		(s.tmode[1] != TM_Turns && s.wins[0] == s.lifebar.ro.match_wins[1]-1) {
+		(s.tmode[1] != TM_Turns && s.wins[0] == s.gs.lb.ro.match_wins[1]-1) {
 		s.roundType[1] = RT_Deciding
 	}
 	if s.roundType[0] == RT_Deciding && s.roundType[1] == RT_Deciding {
@@ -1193,7 +1193,7 @@ func (s *System) action(x, y, scl *float32) {
 	// Update camera
 	introSkip := false
 	if s.tickNextFrame() {
-		if s.lifebar.ro.cur < 1 && !s.introSkipped {
+		if s.gs.lb.ro.cur < 1 && !s.introSkipped {
 			if s.shuttertime > 0 ||
 				s.anyButton() && !s.sf(GSF_roundnotskip) && s.intro > s.lifebar.ro.ctrl_time {
 				s.shuttertime++
@@ -1280,7 +1280,7 @@ func (s *System) action(x, y, scl *float32) {
 	explUpdate(&s.gs.topexplDrawlist, false)
 	explUpdate(&s.gs.underexplDrawlist, true)
 
-	if s.lifebar.ro.act() {
+	if s.lifebar.ro.act(&s.gs.lb.ro) {
 		if s.intro > s.lifebar.ro.ctrl_time {
 			s.intro--
 			if s.sf(GSF_intro) && s.intro <= s.lifebar.ro.ctrl_time {
@@ -1424,8 +1424,8 @@ func (s *System) action(x, y, scl *float32) {
 				w := [...]bool{!s.getChar(1, 0).win(), !s.getChar(0, 0).win()}
 				if !w[0] || !w[1] ||
 					s.tmode[0] == TM_Turns || s.tmode[1] == TM_Turns ||
-					s.draws >= s.lifebar.ro.match_maxdrawgames[0] ||
-					s.draws >= s.lifebar.ro.match_maxdrawgames[1] {
+					s.draws >= s.gs.lb.ro.match_maxdrawgames[0] ||
+					s.draws >= s.gs.lb.ro.match_maxdrawgames[1] {
 					for i, win := range w {
 						if win {
 							s.wins[i]++
@@ -1465,8 +1465,8 @@ func (s *System) action(x, y, scl *float32) {
 						w := [...]bool{!s.getChar(1, 0).win(), !s.getChar(0, 0).win()}
 						if !w[0] || !w[1] ||
 							s.tmode[0] == TM_Turns || s.tmode[1] == TM_Turns ||
-							s.draws >= s.lifebar.ro.match_maxdrawgames[0] ||
-							s.draws >= s.lifebar.ro.match_maxdrawgames[1] {
+							s.draws >= s.gs.lb.ro.match_maxdrawgames[0] ||
+							s.draws >= s.gs.lb.ro.match_maxdrawgames[1] {
 							for i, win := range w {
 								if win {
 									s.lifebar.wi[i].add(s.winType[i])
@@ -1624,7 +1624,7 @@ func (s *System) drawTop() {
 		for _, p := range s.getPlayers() {
 			if p != nil {
 				if len(p.dialogue) > 0 {
-					sys.lifebar.ro.cur = 3
+					sys.gs.lb.ro.cur = 3
 					sys.dialogueFlg = true
 					break
 				}
