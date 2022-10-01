@@ -131,7 +131,7 @@ local motif =
 		connecting_join_text = 'Now connecting to %s... (%s)', --Ikemen feature
 		connecting_overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature
 		connecting_overlay_col = {0, 0, 0}, --Ikemen feature
-		connecting_overlay_alpha = {20, 100}, --Ikemen feature
+		connecting_overlay_alpha = {0, 128}, --Ikemen feature
 		textinput_offset = {25, 32}, --Ikemen feature
 		textinput_font = {'default-3x5.def', 0, 1, 191, 191, 191, -1}, --Ikemen feature
 		textinput_scale = {1.0, 1.0}, --Ikemen feature
@@ -139,7 +139,7 @@ local motif =
 		textinput_address_text = 'Enter Host IP address, e.g. 127.0.0.1\nCopied text can be pasted with INSERT button.', --Ikemen feature
 		textinput_overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature
 		textinput_overlay_col = {0, 0, 0}, --Ikemen feature
-		textinput_overlay_alpha = {20, 100}, --Ikemen feature
+		textinput_overlay_alpha = {0, 128}, --Ikemen feature
 		menu_next_key = '$D&$F', --Ikemen feature
 		menu_previous_key = '$U&$B', --Ikemen feature
 		menu_accept_key = 'a&b&c&x&y&z&s', --Ikemen feature
@@ -170,7 +170,7 @@ local motif =
 		menu_boxcursor_alpharange = {10, 40, 2, 255, 255, 0}, --Ikemen feature
 		menu_boxbg_visible = 0, --Ikemen feature
 		menu_boxbg_col = {0, 0, 0}, --Ikemen feature
-		menu_boxbg_alpha = {20, 100}, --Ikemen feature
+		menu_boxbg_alpha = {0, 128}, --Ikemen feature
 		menu_arrow_up_anim = -1, --Ikemen feature
 		menu_arrow_up_spr = {}, --Ikemen feature
 		menu_arrow_up_offset = {0, 0}, --Ikemen feature
@@ -230,9 +230,9 @@ local motif =
 		text_scale = {1.0, 1.0}, --Ikemen feature
 		overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature
 		overlay_col = {0, 0, 0}, --Ikemen feature
-		overlay_alpha = {20, 100}, --Ikemen feature
+		overlay_alpha = {0, 128}, --Ikemen feature
 	},
-	infobox_text = "Welcome to SUEHIRO's I.K.E.M.E.N GO engine!\n\n* This is a public development release, for testing purposes.\n* This build may contain bugs and incomplete features.\n* Your help and cooperation are appreciated!\n* Original repo source code: https://osdn.net/users/supersuehiro/\n* Bug reports: https://github.com/Windblade-GR01/Ikemen-GO/issues\n* Features wiki: https://github.com/K4thos/Ikemen_GO/wiki",
+	infobox_text = "Welcome to SUEHIRO's I.K.E.M.E.N GO engine!\n\n* This is a public development release, for testing purposes.\n* This build may contain bugs and incomplete features.\n* Your help and cooperation are appreciated!\n* Ikemen GO engine repositories: https://github.com/ikemen-engine\n* Original repo source code: https://osdn.net/users/supersuehiro/",
 	ja_infobox_text = "", --not used in Ikemen
 	select_info =
 	{
@@ -265,6 +265,7 @@ local motif =
 		cell_random_switchtime = 4,
 		--cell_<col>_<row>_offset = {0, 0}, --Ikemen feature
 		--cell_<col>_<row>_facing = 1, --Ikemen feature
+		--cell_<col>_<row>_skip = 0, --Ikemen feature
 		p1_cursor_startcell = {0, 0},
 		p1_cursor_active_anim = -1,
 		p1_cursor_active_spr = {},
@@ -291,6 +292,7 @@ local motif =
 		p2_cursor_done_facing = 1,
 		p2_cursor_done_scale = {1.0, 1.0},
 		p2_cursor_blink = 1,
+		p2_cursor_switchtime = 3, --Ikemen feature
 		p2_cursor_move_snd = {100, 0},
 		p2_cursor_done_snd = {100, 1},
 		p2_random_move_snd = {100, 0},
@@ -838,7 +840,7 @@ local motif =
 		cancel_snd = {100, 2}, --Ikemen feature
 		overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		overlay_col = {0, 0, 0}, --Ikemen feature
-		overlay_alpha = {20, 100}, --Ikemen feature
+		overlay_alpha = {0, 128}, --Ikemen feature
 		p1_state = {5500, 5300}, --Ikemen feature
 		p1_yes_state = {5510, 180}, --Ikemen feature
 		p1_no_state = {5520, 170}, --Ikemen feature
@@ -947,7 +949,7 @@ local motif =
 		winquote_window = {},
 		overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		overlay_col = {0, 0, 0}, --Ikemen feature
-		overlay_alpha = {20, 100}, --Ikemen feature
+		overlay_alpha = {0, 128}, --Ikemen feature
 		p1_state = {}, --Ikemen feature
 		p2_state = {}, --Ikemen feature
 		p1_teammate_state = {}, --Ikemen feature
@@ -977,7 +979,7 @@ local motif =
 		wintext_layerno = 2,
 		overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		overlay_col = {0, 0, 0}, --Ikemen feature
-		overlay_alpha = {20, 100}, --Ikemen feature
+		overlay_alpha = {0, 128}, --Ikemen feature
 		p1_state = {180}, --Ikemen feature
 		p2_state = {}, --Ikemen feature
 		p1_teammate_state = {}, --Ikemen feature
@@ -1017,7 +1019,7 @@ local motif =
 		roundstowin = 5,
 		overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		overlay_col = {0, 0, 0}, --Ikemen feature
-		overlay_alpha = {20, 100}, --Ikemen feature
+		overlay_alpha = {0, 128}, --Ikemen feature
 		p1_state = {175, 170}, --Ikemen feature
 		p1_win_state = {180}, --Ikemen feature
 		p2_state = {}, --Ikemen feature
@@ -1050,7 +1052,7 @@ local motif =
 		winstext_layerno = 2, --Ikemen feature
 		overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		overlay_col = {0, 0, 0}, --Ikemen feature
-		overlay_alpha = {20, 100}, --Ikemen feature
+		overlay_alpha = {0, 128}, --Ikemen feature
 		p1_state = {175, 170}, --Ikemen feature
 		p1_win_state = {180}, --Ikemen feature
 		p2_state = {}, --Ikemen feature
@@ -1128,7 +1130,7 @@ local motif =
 		menu_boxcursor_alpharange = {10, 40, 2, 255, 255, 0}, --Ikemen feature
 		menu_boxbg_visible = 1, --Ikemen feature
 		menu_boxbg_col = {0, 0, 0}, --Ikemen feature
-		menu_boxbg_alpha = {20, 100}, --Ikemen feature
+		menu_boxbg_alpha = {0, 128}, --Ikemen feature
 		menu_arrow_up_anim = -1, --Ikemen feature
 		menu_arrow_up_spr = {}, --Ikemen feature
 		menu_arrow_up_offset = {0, 0}, --Ikemen feature
@@ -1203,7 +1205,7 @@ local motif =
 		textinput_resheight_text = 'Type in screen height.\nPress ENTER to accept.\nPress ESC to cancel.', --Ikemen feature
 		textinput_overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		textinput_overlay_col = {0, 0, 0}, --Ikemen feature
-		textinput_overlay_alpha = {20, 100}, --Ikemen feature
+		textinput_overlay_alpha = {0, 128}, --Ikemen feature
 		cursor_move_snd = {100, 0},
 		cursor_done_snd = {100, 1},
 		cancel_snd = {100, 2},
@@ -1322,7 +1324,7 @@ local motif =
 		menu_boxcursor_alpharange = {10, 40, 2, 255, 255, 0}, --Ikemen feature
 		menu_boxbg_visible = 1, --Ikemen feature
 		menu_boxbg_col = {0, 0, 0}, --Ikemen feature
-		menu_boxbg_alpha = {20, 100}, --Ikemen feature
+		menu_boxbg_alpha = {0, 128}, --Ikemen feature
 		menu_arrow_up_anim = -1, --Ikemen feature
 		menu_arrow_up_spr = {}, --Ikemen feature
 		menu_arrow_up_offset = {0, 0}, --Ikemen feature
@@ -1395,7 +1397,7 @@ local motif =
 		menu_boxcursor_alpharange = {10, 40, 2, 255, 255, 0}, --Ikemen feature
 		menu_boxbg_visible = 1, --Ikemen feature
 		menu_boxbg_col = {0, 0, 0}, --Ikemen feature
-		menu_boxbg_alpha = {20, 100}, --Ikemen feature
+		menu_boxbg_alpha = {0, 128}, --Ikemen feature
 		menu_arrow_up_anim = -1, --Ikemen feature
 		menu_arrow_up_spr = {}, --Ikemen feature
 		menu_arrow_up_offset = {0, 0}, --Ikemen feature
@@ -1409,7 +1411,7 @@ local motif =
 		menu_title_uppercase = 1, --Ikemen feature
 		overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		overlay_col = {0, 0, 0}, --Ikemen feature
-		overlay_alpha = {20, 100}, --Ikemen feature
+		overlay_alpha = {0, 128}, --Ikemen feature
 		cursor_move_snd = {100, 0}, --Ikemen feature
 		cursor_done_snd = {100, 1}, --Ikemen feature
 		cancel_snd = {100, 2}, --Ikemen feature
@@ -1433,7 +1435,7 @@ local motif =
 		movelist_window_visibleitems = 18, --Ikemen feature
 		movelist_overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		movelist_overlay_col = {0, 0, 0}, --Ikemen feature
-		movelist_overlay_alpha = {20, 100}, --Ikemen feature
+		movelist_overlay_alpha = {0, 128}, --Ikemen feature
 		movelist_arrow_up_anim = -1, --Ikemen feature
 		movelist_arrow_up_spr = {}, --Ikemen feature
 		movelist_arrow_up_offset = {0, 0}, --Ikemen feature
@@ -1577,7 +1579,7 @@ local motif =
 		menu_boxcursor_alpharange = {10, 40, 2, 255, 255, 0}, --Ikemen feature
 		menu_boxbg_visible = 0, --Ikemen feature
 		menu_boxbg_col = {0, 0, 0}, --Ikemen feature
-		menu_boxbg_alpha = {20, 100}, --Ikemen feature
+		menu_boxbg_alpha = {0, 128}, --Ikemen feature
 		menu_arrow_up_anim = -1, --Ikemen feature
 		menu_arrow_up_spr = {}, --Ikemen feature
 		menu_arrow_up_offset = {0, 0}, --Ikemen feature
@@ -1789,7 +1791,7 @@ local motif =
 		window_visibleitems = 10, --Ikemen feature
 		overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		overlay_col = {0, 0, 0}, --Ikemen feature
-		overlay_alpha = {20, 100}, --Ikemen feature
+		overlay_alpha = {0, 128}, --Ikemen feature
 		move_snd = {100, 0}, --Ikemen feature
 		done_snd = {100, 1}, --Ikemen feature
 		cancel_snd = {100, 2}, --Ikemen feature
@@ -1809,6 +1811,7 @@ local motif =
 		text_offset = {25, 33}, --Ikemen feature
 		text_font = {'f-6x9.def', 0, 1, 255, 255, 255, -1}, --Ikemen feature
 		text_scale = {1.0, 1.0}, --Ikemen feature
+		text_ratio_text = "Incorrect 'arcade.ratiomatches' settings detected.\nRefer to tutorial available in default select.def.", --Ikemen feature
 		text_reload_text = 'Some selected options require Ikemen to be restarted.\nPress any key to exit the program.', --Ikemen feature
 		text_noreload_text = 'Some selected options require Ikemen to be restarted.\nPress any key to continue.', --Ikemen feature
 		text_keys_text = 'Conflict between button keys detected.\nAll keys should have unique assignment.\n\nPress any key to continue.\nPress ESC to reset.', --Ikemen feature
@@ -1816,7 +1819,7 @@ local motif =
 		text_shaders_text = 'No external OpenGL shaders detected.\nIkemen GO supports files with .vert and .frag extensions.\nShaders are loaded from "./external/shaders" directory.', --Ikemen feature
 		overlay_window = {0, 0, main.SP_Localcoord[1], main.SP_Localcoord[2]}, --Ikemen feature (0, 0, 320, 240)
 		overlay_col = {0, 0, 0}, --Ikemen feature
-		overlay_alpha = {20, 100}, --Ikemen feature
+		overlay_alpha = {0, 128}, --Ikemen feature
 		done_snd = {100, 0}, --Ikemen feature
 		cancel_snd = {100, 2}, --Ikemen feature
 	},
@@ -1927,6 +1930,7 @@ function motif.setBaseTitleInfo()
 		"options",
 		"exit",
 	}
+	hook.run("motif.setBaseTitleInfo")
 end
 
 function motif.setBaseOptionInfo()
@@ -2167,6 +2171,7 @@ function motif.setBaseOptionInfo()
 		"savereturn",
 		"return",
 	}
+	hook.run("motif.setBaseOptionInfo")
 end
 
 function motif.setBaseMenuInfo()
@@ -2199,6 +2204,7 @@ function motif.setBaseMenuInfo()
 		"characterchange",
 		"exit",
 	}
+	hook.run("motif.setBaseMenuInfo")
 end
 
 function motif.setBaseTrainingInfo()
@@ -2247,6 +2253,7 @@ function motif.setBaseTrainingInfo()
 		"characterchange",
 		"exit",
 	}
+	hook.run("motif.setBaseTrainingInfo")
 end
 
 --;===========================================================
@@ -2427,7 +2434,7 @@ motif.training_info = main.f_tableMerge(motif.training_info, motif.menu_info)
 if t.menu_info == nil then t.menu_info = {} end
 if t.training_info == nil then t.training_info = {} end
 for k, v in pairs(t.menu_info) do
-	if not k:match('_itemname_') then
+	if t.training_info[k] == nil and not k:match('_itemname_') then
 		t.training_info[k] = v
 	end
 end
@@ -2500,6 +2507,7 @@ for _, v in ipairs({
 	{group = 'files', param = 'select', dirs = {motif.fileDir, '', 'data/'}},
 	{group = 'files', param = 'fight', dirs = {motif.fileDir, '', 'data/'}},
 	{group = 'files', param = 'glyphs', dirs = {motif.fileDir, '', 'data/'}},
+	{group = 'files', param = 'module', dirs = {motif.fileDir, '', 'data/'}},
 	{group = 'music', param = 'title_bgm', dirs = {motif.fileDir, '', 'data/', 'sound/'}},
 	{group = 'music', param = 'select_bgm', dirs = {motif.fileDir, '', 'data/', 'sound/'}},
 	{group = 'music', param = 'vs_bgm', dirs = {motif.fileDir, '', 'data/', 'sound/'}},
@@ -2591,8 +2599,8 @@ function motif.f_loadSprData(t, v)
 		t[data] = main.f_animFromTable(
 			motif.anim[t[animParam]],
 			motif.files.spr_data,
-			t[v.s .. 'offset'][1] + (v.x or 0),
-			t[v.s .. 'offset'][2] + (v.y or 0),
+			(t[v.s .. 'offset'][1] + (v.x or 0)) / t[v.s .. 'scale'][1],
+			(t[v.s .. 'offset'][2] + (v.y or 0)) / t[v.s .. 'scale'][2],
 			t[v.s .. 'scale'][1],
 			t[v.s .. 'scale'][2],
 			motif.f_animFacing(t[v.s .. 'facing'])
@@ -2606,7 +2614,7 @@ function motif.f_loadSprData(t, v)
 			end
 		end
 		if t[v.s .. 'facing'] == -1 then facing = ', H' else facing = '' end
-		t[data] = animNew(motif.files.spr_data, t[sprParam][1] .. ', ' .. t[sprParam][2] .. ', ' .. t[v.s .. 'offset'][1] + (v.x or 0) .. ', ' .. t[v.s .. 'offset'][2] + (v.y or 0) .. ', -1' .. facing)
+		t[data] = animNew(motif.files.spr_data, t[sprParam][1] .. ', ' .. t[sprParam][2] .. ', ' .. (t[v.s .. 'offset'][1] + (v.x or 0)) / t[v.s .. 'scale'][1] .. ', ' .. (t[v.s .. 'offset'][2] + (v.y or 0)) / t[v.s .. 'scale'][2] .. ', -1' .. facing)
 		animSetScale(t[data], t[v.s .. 'scale'][1], t[v.s .. 'scale'][2])
 		animUpdate(t[data])
 	else --create dummy data
@@ -2617,12 +2625,14 @@ function motif.f_loadSprData(t, v)
 end
 
 --creates fadein/fadeout anim data
-for _, v in ipairs({'title_info', 'select_info', 'vs_screen', 'demo_mode', 'continue_screen', 'victory_screen', 'win_screen', 'survival_results_screen', 'time_attack_results_screen', 'option_info', 'replay_info', 'menu_info', 'training_info', 'attract_mode', 'challenger_info', 'hiscore_info'}) do
-	if motif[v].fadein_anim ~= -1 then
-		motif.f_loadSprData(motif[v], {s = 'fadein_'})
-	end
-	if motif[v].fadeout_anim ~= -1 then
-		motif.f_loadSprData(motif[v], {s = 'fadeout_'})
+for k, v in pairs(motif) do
+	if type(v) == "table" then
+		if motif[k].fadein_anim ~= nil and motif[k].fadein_anim > -1 then
+			motif.f_loadSprData(motif[v], {s = 'fadein_'})
+		end
+		if motif[k].fadeout_anim ~= nil and motif[k].fadeout_anim > -1 then
+			motif.f_loadSprData(motif[v], {s = 'fadeout_'})
+		end
 	end
 end
 
@@ -2720,36 +2730,21 @@ for k, v in pairs(motif.glyphs) do
 	}
 end
 
---default menus
-if main.t_sort.title_info == nil or main.t_sort.title_info.menu == nil or #main.t_sort.title_info.menu == 0 then
-	motif.setBaseTitleInfo()
-end
-if main.t_sort.option_info == nil or main.t_sort.option_info.menu == nil or #main.t_sort.option_info.menu == 0 then
-	motif.setBaseOptionInfo()
-end
-if main.t_sort.menu_info == nil or main.t_sort.menu_info.menu == nil or #main.t_sort.menu_info.menu == 0 then
-	motif.setBaseMenuInfo()
-end
-if main.t_sort.training_info == nil or main.t_sort.training_info.menu == nil or #main.t_sort.training_info.menu == 0 then
-	motif.setBaseTrainingInfo()
-end
-
-if main.t_sort.select_info.teammenu == nil then
-	main.t_sort.select_info.teammenu = {'single', 'simul', 'turns'}
-end
-
---menus spr/anim data
-for group_k, group_t in pairs(main.t_sort) do
-	for subt_k, subt_t in pairs(group_t) do
-		for _, v in ipairs(subt_t) do
-			if subt_k == 'teammenu' then
-				for i = 1, 2 do
-					motif.f_loadSprData(motif[group_k], {s = 'p' .. i .. '_' .. subt_k .. '_bg_' .. v .. '_', x = motif[group_k]['p' .. i .. '_teammenu_pos'][1], y = motif[group_k]['p' .. i .. '_teammenu_pos'][2]})
-					motif.f_loadSprData(motif[group_k], {s = 'p' .. i .. '_' .. subt_k .. '_bg_active_' .. v .. '_', x = motif[group_k]['p' .. i .. '_teammenu_pos'][1], y = motif[group_k]['p' .. i .. '_teammenu_pos'][2]})
+-- initialize at the end of main.lua
+function motif.f_start()
+	-- menus spr/anim data
+	for group_k, group_t in pairs(main.t_sort) do
+		for subt_k, subt_t in pairs(group_t) do
+			for _, v in ipairs(subt_t) do
+				if subt_k == 'teammenu' then
+					for i = 1, 2 do
+						motif.f_loadSprData(motif[group_k], {s = 'p' .. i .. '_' .. subt_k .. '_bg_' .. v .. '_', x = motif[group_k]['p' .. i .. '_teammenu_pos'][1], y = motif[group_k]['p' .. i .. '_teammenu_pos'][2]})
+						motif.f_loadSprData(motif[group_k], {s = 'p' .. i .. '_' .. subt_k .. '_bg_active_' .. v .. '_', x = motif[group_k]['p' .. i .. '_teammenu_pos'][1], y = motif[group_k]['p' .. i .. '_teammenu_pos'][2]})
+					end
+				else--if subt_k == 'menu' or subt_k == 'keymenu' then
+					motif.f_loadSprData(motif[group_k], {s = subt_k .. '_bg_' .. v .. '_', x = motif[group_k].menu_pos[1], y = motif[group_k].menu_pos[2]})
+					motif.f_loadSprData(motif[group_k], {s = subt_k .. '_bg_active_' .. v .. '_', x = motif[group_k].menu_pos[1], y = motif[group_k].menu_pos[2]})
 				end
-			else--if subt_k == 'menu' or subt_k == 'keymenu' then
-				motif.f_loadSprData(motif[group_k], {s = subt_k .. '_bg_' .. v .. '_', x = motif[group_k].menu_pos[1], y = motif[group_k].menu_pos[2]})
-				motif.f_loadSprData(motif[group_k], {s = subt_k .. '_bg_active_' .. v .. '_', x = motif[group_k].menu_pos[1], y = motif[group_k].menu_pos[2]})
 			end
 		end
 	end

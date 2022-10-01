@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-gl/glfw/v3.3/glfw"
+	glfw "github.com/fyne-io/glfw-js"
 )
 
 type CommandKey byte
@@ -589,8 +589,8 @@ func (sk ShortcutKey) Test(k glfw.Key, m glfw.ModifierKey) bool {
 		m&(glfw.ModShift|glfw.ModControl|glfw.ModAlt) == sk.Mod
 }
 func keyCallback(_ *glfw.Window, key glfw.Key, _ int, action glfw.Action, mk glfw.ModifierKey) {
-	if (key == glfw.KeyUnknown) {
-		return;
+	if key == glfw.KeyUnknown {
+		return
 	}
 	switch action {
 	case glfw.Release:
@@ -621,29 +621,23 @@ func charCallback(_ *glfw.Window, char rune, mk glfw.ModifierKey) {
 	sys.keyString = string(char)
 }
 
-var joystick = [...]glfw.Joystick{glfw.Joystick1, glfw.Joystick2,
-	glfw.Joystick3, glfw.Joystick4, glfw.Joystick5, glfw.Joystick6,
-	glfw.Joystick7, glfw.Joystick8, glfw.Joystick9, glfw.Joystick10,
-	glfw.Joystick11, glfw.Joystick12, glfw.Joystick13, glfw.Joystick14,
-	glfw.Joystick15, glfw.Joystick16}
-
 func JoystickState(joy, button int) bool {
 	if joy < 0 {
 		return sys.keyState[glfw.Key(button)]
 	}
-	if joy >= len(joystick) {
+	if joy >= input.GetMaxJoystickCount() {
 		return false
 	}
-	btns := joystick[joy].GetButtons()
+	btns := input.GetJoystickButtons(joy)
 	if button < 0 {
 		button = -button - 1
-		axes := joystick[joy].GetAxes()
+		axes := input.GetJoystickAxes(joy)
 
 		if len(axes)*2 <= button {
 			return false
 		}
 
-		var joyName = joystick[joy].GetGamepadName()
+		var joyName = input.GetJoystickName(joy)
 
 		//Xbox360コントローラーのLRトリガー判定
 		if (button == 9 || button == 11) && (strings.Contains(joyName, "XInput") || strings.Contains(joyName, "X360")) {

@@ -164,6 +164,7 @@ func newCompiler() *Compiler {
 		"targetredlifeadd":     c.targetRedLifeAdd,
 		"targetscoreadd":       c.targetScoreAdd,
 		"text":                 c.text,
+		"modifystagevar":       c.modifyStageVar,
 	}
 	return c
 }
@@ -620,8 +621,8 @@ func (c *Compiler) attr(text string, hitdef bool) (int32, error) {
 			return 0, Error("Invalid value: " + string(a))
 		}
 	}
-	hitdefflg := flg
-	for i, a := range att[1:] {
+	//hitdefflg := flg
+	for _, a := range att[1:] {
 		l := len(a)
 		if sys.ignoreMostErrors && l >= 2 {
 			a = strings.TrimSpace(a[:2])
@@ -659,23 +660,23 @@ func (c *Compiler) attr(text string, hitdef bool) (int32, error) {
 			flg |= int32(AT_HA | AT_HT | AT_HP)
 		default:
 			if sys.ignoreMostErrors && sys.cgi[c.playerNo].ver[0] == 1 {
-				if hitdef {
-					flg = hitdefflg
-				}
+				//if hitdef {
+				//	flg = hitdefflg
+				//}
 				return flg, nil
 			}
 			return 0, Error("Invalid value: " + a)
 		}
-		if i == 0 {
-			hitdefflg = flg
-		}
+		//if i == 0 {
+		//	hitdefflg = flg
+		//}
 		if l > 2 {
 			break
 		}
 	}
-	if hitdef {
-		flg = hitdefflg
-	}
+	//if hitdef {
+	//	flg = hitdefflg
+	//}
 	return flg, nil
 }
 func (c *Compiler) trgAttr(in *string) (int32, error) {
@@ -1470,8 +1471,6 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 			out.append(OC_const_size_air_back)
 		case "size.air.front":
 			out.append(OC_const_size_air_front)
-		case "size.z.width":
-			out.append(OC_const_size_z_width)
 		case "size.height":
 			out.append(OC_const_size_height)
 		case "size.attack.dist":
@@ -1498,6 +1497,10 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 			out.append(OC_const_size_draw_offset_x)
 		case "size.draw.offset.y":
 			out.append(OC_const_size_draw_offset_y)
+		case "size.z.width":
+			out.append(OC_const_size_z_width)
+		case "size.z.enable":
+			out.append(OC_const_size_z_enable)
 		case "velocity.walk.fwd.x":
 			out.append(OC_const_velocity_walk_fwd_x)
 		case "velocity.walk.back.x":
@@ -1677,6 +1680,12 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 			switch c.token {
 			case "animtype":
 				out.append(OC_ex_gethitvar_animtype)
+			case "air.animtype":
+				out.append(OC_ex_gethitvar_air_animtype)
+			case "ground.animtype":
+				out.append(OC_ex_gethitvar_ground_animtype)
+			case "fall.animtype":
+				out.append(OC_ex_gethitvar_fall_animtype)
 			case "airtype":
 				out.append(OC_ex_gethitvar_airtype)
 			case "groundtype":
@@ -2047,18 +2056,89 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 			return bvNone(), err
 		}
 		var opc OpCode
+		isStr := false
 		switch svname {
 		case "info.name":
 			opc = OC_const_stagevar_info_name
+			isStr = true
 		case "info.displayname":
 			opc = OC_const_stagevar_info_displayname
+			isStr = true
 		case "info.author":
 			opc = OC_const_stagevar_info_author
+			isStr = true
+		case "camera.boundleft":
+			opc = OC_const_stagevar_camera_boundleft
+		case "camera.boundright":
+			opc = OC_const_stagevar_camera_boundright
+		case "camera.boundhigh":
+			opc = OC_const_stagevar_camera_boundhigh
+		case "camera.boundlow":
+			opc = OC_const_stagevar_camera_boundlow
+		case "camera.verticalfollow":
+			opc = OC_const_stagevar_camera_verticalfollow
+		case "camera.floortension":
+			opc = OC_const_stagevar_camera_floortension
+		case "camera.tensionhigh":
+			opc = OC_const_stagevar_camera_tensionhigh
+		case "camera.tensionlow":
+			opc = OC_const_stagevar_camera_tensionlow
+		case "camera.tension":
+			opc = OC_const_stagevar_camera_tension
+		case "camera.startzoom":
+			opc = OC_const_stagevar_camera_startzoom
+		case "camera.zoomout":
+			opc = OC_const_stagevar_camera_zoomout
+		case "camera.zoomin":
+			opc = OC_const_stagevar_camera_zoomin
+		case "camera.ytension.enable":
+			opc = OC_const_stagevar_camera_ytension_enable
+		case "playerinfo.leftbound":
+			opc = OC_const_stagevar_playerinfo_leftbound
+		case "playerinfo.rightbound":
+			opc = OC_const_stagevar_playerinfo_rightbound
+		case "scaling.topscale":
+			opc = OC_const_stagevar_scaling_topscale
+		case "bound.screenleft":
+			opc = OC_const_stagevar_bound_screenleft
+		case "bound.screenright":
+			opc = OC_const_stagevar_bound_screenright
+		case "stageinfo.zoffset":
+			opc = OC_const_stagevar_stageinfo_zoffset
+		case "stageinfo.zoffsetlink":
+			opc = OC_const_stagevar_stageinfo_zoffsetlink
+		case "stageinfo.xscale":
+			opc = OC_const_stagevar_stageinfo_xscale
+		case "stageinfo.yscale":
+			opc = OC_const_stagevar_stageinfo_yscale
+		case "shadow.intensity":
+			opc = OC_const_stagevar_shadow_intensity
+		case "shadow.color.r":
+			opc = OC_const_stagevar_shadow_color_r
+		case "shadow.color.g":
+			opc = OC_const_stagevar_shadow_color_g
+		case "shadow.color.b":
+			opc = OC_const_stagevar_shadow_color_b
+		case "shadow.yscale":
+			opc = OC_const_stagevar_shadow_yscale
+		case "shadow.fade.range.begin":
+			opc = OC_const_stagevar_shadow_fade_range_begin
+		case "shadow.fade.range.end":
+			opc = OC_const_stagevar_shadow_fade_range_end
+		case "shadow.xshear":
+			opc = OC_const_stagevar_shadow_xshear
+		case "reflection.intensity":
+			opc = OC_const_stagevar_reflection_intensity
 		default:
 			return bvNone(), Error("Invalid data: " + svname)
 		}
-		if err := nameSub(opc); err != nil {
-			return bvNone(), err
+		if isStr {
+			if err := nameSub(opc); err != nil {
+				return bvNone(), err
+			}
+		} else {
+			out.append(OC_const_)
+			out.append(opc)
 		}
 	case "teammode":
 		if err := eqne(func() error {
@@ -2517,6 +2597,12 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 			out.appendI32Op(OC_ex_isassertedchar, int32(CSF_animfreeze))
 		case "postroundinput":
 			out.appendI32Op(OC_ex_isassertedchar, int32(CSF_postroundinput))
+		case "nodizzypointsdamage":
+			out.appendI32Op(OC_ex_isassertedchar, int32(CSF_nodizzypointsdamage))
+		case "noguardpointsdamage":
+			out.appendI32Op(OC_ex_isassertedchar, int32(CSF_noguardpointsdamage))
+		case "noredlifedamage":
+			out.appendI32Op(OC_ex_isassertedchar, int32(CSF_noredlifedamage))
 		case "intro":
 			out.appendI32Op(OC_ex_isassertedglobal, int32(GSF_intro))
 		case "roundnotover":
@@ -2543,6 +2629,8 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 			out.appendI32Op(OC_ex_isassertedglobal, int32(GSF_nokovelocity))
 		case "roundnotskip":
 			out.appendI32Op(OC_ex_isassertedglobal, int32(GSF_roundnotskip))
+		case "roundfreeze":
+			out.appendI32Op(OC_ex_isassertedglobal, int32(GSF_roundfreeze))
 		default:
 			return bvNone(), Error("Invalid data: " + c.token)
 		}
@@ -2560,12 +2648,30 @@ func (c *Compiler) expValue(out *BytecodeExp, in *string,
 		if err := c.kakkohiraku(in); err != nil {
 			return bvNone(), err
 		}
-		out.append(OC_ex_)
-		out.appendI32Op(OC_ex_maparray, int32(sys.stringPool[c.playerNo].Add(strings.ToLower(c.token))))
+		var m string = c.token
 		c.token = c.tokenizer(in)
 		if err := c.kakkotojiru(); err != nil {
 			return bvNone(), err
 		}
+		c.token = c.tokenizer(in)
+		if c.token == ":=" {
+			c.token = c.tokenizer(in)
+			bv2, err := c.expEqne(&be2, in)
+			if err != nil {
+				return bvNone(), err
+			}
+			be2.appendValue(bv2)
+			if rd {
+				out.appendI32Op(OC_nordrun, int32(len(be2)))
+			}
+			out.append(be2...)
+			out.append(OC_st_)
+			out.appendI32Op(OC_st_map, int32(sys.stringPool[c.playerNo].Add(strings.ToLower(m))))
+		} else {
+			out.append(OC_ex_)
+			out.appendI32Op(OC_ex_maparray, int32(sys.stringPool[c.playerNo].Add(strings.ToLower(m))))
+		}
+		return bvNone(), nil
 	case "memberno":
 		out.append(OC_ex_, OC_ex_memberno)
 	case "movecountered":
@@ -3235,6 +3341,8 @@ func (c *Compiler) parseSection(
 		var name, data string
 		if len(line) >= 3 && strings.ToLower(line[:3]) == "var" {
 			name, data = "var", line
+		} else if len(line) >= 3 && strings.ToLower(line[:3]) == "map" {
+			name, data = "map", line
 		} else if len(line) >= 4 && strings.ToLower(line[:4]) == "fvar" {
 			name, data = "fvar", line
 		} else if len(line) >= 6 && strings.ToLower(line[:6]) == "sysvar" {
@@ -3773,7 +3881,7 @@ func cnsStringArray(arg string) ([]string, error) {
 
 // Compile a state file
 func (c *Compiler) stateCompile(states map[int32]StateBytecode,
-	filename, def string, negoverride bool) error {
+	filename, def string, negoverride bool, constants map[string]float32) error {
 	var str string
 	zss := HasExtension(filename, ".zss")
 	fnz := filename
@@ -3787,7 +3895,7 @@ func (c *Compiler) stateCompile(states map[int32]StateBytecode,
 				return err
 			}
 			str = string(b)
-			return c.stateCompileZ(states, fnz, str)
+			return c.stateCompileZ(states, fnz, str, constants)
 		}
 
 		// Try reading as an st file
@@ -3804,7 +3912,7 @@ func (c *Compiler) stateCompile(states map[int32]StateBytecode,
 			str = string(b)
 			return nil
 		}); err == nil {
-			return c.stateCompileZ(states, fnz, str)
+			return c.stateCompileZ(states, fnz, str, constants)
 		}
 		return err
 	}
@@ -3827,7 +3935,12 @@ func (c *Compiler) stateCompile(states map[int32]StateBytecode,
 			continue
 		}
 
-		c.stateNo = Atoi(line[10:])
+		// Parse state number
+		line = line[10:]
+		var err error
+		if c.stateNo, err = c.scanStateDef(&line, constants); err != nil {
+			return errmes(err)
+		}
 
 		// Skip if this state has already been added
 		if existInThisFile[c.stateNo] {
@@ -4275,6 +4388,28 @@ func (c *Compiler) scanI32(line *string) (int32, error) {
 	v, err := strconv.ParseInt(t, 10, 32)
 	return int32(v), err
 }
+func (c *Compiler) scanStateDef(line *string, constants map[string]float32) (int32, error) {
+	t := c.scan(line)
+	if t == "" {
+		return 0, c.yokisinaiToken()
+	}
+	var err error
+	if t == "const" {
+		c.scan(line)
+		k := c.scan(line)
+		c.scan(line)
+		v, ok := constants[k]
+		if !ok {
+			err = Error(fmt.Sprintf("StateDef constant not found: %v", k))
+		}
+		return int32(v), err
+	}
+	if t == "-" && len(*line) > 0 && (*line)[0] >= '0' && (*line)[0] <= '9' {
+		t += c.scan(line)
+	}
+	v := Atoi(t)
+	return v, err
+}
 func (c *Compiler) subBlock(line *string, root bool,
 	sbc *StateBytecode, numVars *int32) (*StateBlock, error) {
 	bl := newStateBlock()
@@ -4632,7 +4767,7 @@ func (c *Compiler) stateBlock(line *string, bl *StateBlock, root bool,
 	return c.yokisinaiToken()
 }
 func (c *Compiler) stateCompileZ(states map[int32]StateBytecode,
-	filename, src string) error {
+	filename, src string, constants map[string]float32) error {
 	defer func(oime bool) {
 		sys.ignoreMostErrors = oime
 	}(sys.ignoreMostErrors)
@@ -4700,7 +4835,7 @@ func (c *Compiler) stateCompileZ(states map[int32]StateBytecode,
 			return errmes(c.yokisinaiToken())
 		case "statedef":
 			var err error
-			if c.stateNo, err = c.scanI32(&line); err != nil {
+			if c.stateNo, err = c.scanStateDef(&line, constants); err != nil {
 				return errmes(err)
 			}
 			c.scan(&line)
@@ -4801,8 +4936,7 @@ func (c *Compiler) stateCompileZ(states map[int32]StateBytecode,
 }
 
 // Compile a character definition file
-func (c *Compiler) Compile(pn int, def string) (map[int32]StateBytecode,
-	error) {
+func (c *Compiler) Compile(pn int, def string, constants map[string]float32) (map[int32]StateBytecode, error) {
 	c.playerNo = pn
 	states := make(map[int32]StateBytecode)
 
@@ -4865,16 +4999,20 @@ func (c *Compiler) Compile(pn int, def string) (map[int32]StateBytecode,
 	}
 
 	// Load the command file
-	if err := LoadFile(&cmd, []string{def, "", sys.motifDir, "data/"}, func(filename string) error {
-		str, err := LoadText(filename)
-		if err != nil {
-			return err
+	if len(cmd) > 0 {
+		if err := LoadFile(&cmd, []string{def, "", sys.motifDir, "data/"}, func(filename string) error {
+			str, err := LoadText(filename)
+			if err != nil {
+				return err
+			}
+			str = str + sys.commonCmd
+			lines, i = SplitAndTrim(str, "\n"), 0
+			return nil
+		}); err != nil {
+			return nil, err
 		}
-		str = str + sys.commonCmd
-		lines, i = SplitAndTrim(str, "\n"), 0
-		return nil
-	}); err != nil {
-		return nil, err
+	} else {
+		lines, i = SplitAndTrim(sys.commonCmd, "\n"), 0
 	}
 
 	// Initialize command list data
@@ -4979,26 +5117,28 @@ func (c *Compiler) Compile(pn int, def string) (map[int32]StateBytecode,
 	for _, s := range st {
 		if len(s) > 0 {
 			if err := c.stateCompile(states, s, def, sys.cgi[pn].ikemenver[0] == 0 &&
-				sys.cgi[pn].ikemenver[1] == 0); err != nil {
+				sys.cgi[pn].ikemenver[1] == 0, constants); err != nil {
 				return nil, err
 			}
 		}
 	}
 	// Compile states in command file
-	if err := c.stateCompile(states, cmd, def, sys.cgi[pn].ikemenver[0] == 0 &&
-		sys.cgi[pn].ikemenver[1] == 0); err != nil {
-		return nil, err
+	if len(cmd) > 0 {
+		if err := c.stateCompile(states, cmd, def, sys.cgi[pn].ikemenver[0] == 0 &&
+			sys.cgi[pn].ikemenver[1] == 0, constants); err != nil {
+			return nil, err
+		}
 	}
 	// Compile states in common state file
 	if len(stcommon) > 0 {
 		if err := c.stateCompile(states, stcommon, def, sys.cgi[pn].ikemenver[0] == 0 &&
-			sys.cgi[pn].ikemenver[1] == 0); err != nil {
+			sys.cgi[pn].ikemenver[1] == 0, constants); err != nil {
 			return nil, err
 		}
 	}
 	// Compile common states from config
 	for _, s := range sys.commonStates {
-		if err := c.stateCompile(states, s, def, false); err != nil {
+		if err := c.stateCompile(states, s, def, false, constants); err != nil {
 			return nil, err
 		}
 	}

@@ -69,11 +69,11 @@
 	; Ikemen features
 	; --------------------------------------------------------------------------
 	; Glyph art used by Movelists feature
-	; https://github.com/K4thos/Ikemen_GO/wiki/Miscellaneous-info
+	; https://github.com/ikemen-engine/Ikemen-GO/wiki/Miscellaneous-info
 	glyphs = "data/glyphs.sff"
 
 	; Path to external module associated with this screenpack
-	; https://github.com/K4thos/Ikemen_GO/wiki/Miscellaneous-info#external-modules
+	; https://github.com/ikemen-engine/Ikemen-GO/wiki/Miscellaneous-info#external-modules
 	module = ""
 
 ;[ja.Files]
@@ -221,7 +221,7 @@
 	connecting.join.text = "Now connecting to %s... (%s)"
 	;connecting.overlay.window = 0, 0, localcoordX, localcoordY
 	connecting.overlay.col = 0, 0, 0
-	connecting.overlay.alpha = 20, 100
+	connecting.overlay.alpha = 0, 128
 
 	; Controls screen rendered during adding new serverjoin IP address
 	textinput.offset = 25, 32
@@ -231,7 +231,7 @@
 	textinput.address.text = "Enter Host IP address, e.g. 127.0.0.1\nCopied text can be pasted with INSERT button."
 	;textinput.overlay.window = 0, 0, localcoordX, localcoordY
 	textinput.overlay.col = 0, 0, 0
-	textinput.overlay.alpha = 20, 100
+	textinput.overlay.alpha = 0, 128
 
 	; Keys responsible for menu movement
 	menu.next.key = "$D&$F"
@@ -269,7 +269,7 @@
 	; values assigned to menu.pos and menu.boxcursor.coords parameters.
 	menu.boxbg.visible = 0
 	menu.boxbg.col = 0, 0, 0
-	menu.boxbg.alpha = 20, 100
+	menu.boxbg.alpha = 0, 128
 
 	; This art is rendered only if there are more menu itemanames to display
 	; than allowed by menu.window.visibleitems. Meant to be used as a visual
@@ -299,7 +299,7 @@
 	; won't be checked again, until the game is restarted).
 	;menu.unlock.<itemname> = "true"
 
-	; https://github.com/K4thos/Ikemen_GO/wiki/Screenpack-features#submenus
+	; https://github.com/ikemen-engine/Ikemen-GO/wiki/Screenpack-features#submenus
 	; Unassigned menu items:
 	;menu.itemname.versuscoop = "VERSUS CO-OP"
 	;menu.itemname.freebattle = "QUICK MATCH"
@@ -337,7 +337,7 @@
 
 	;overlay.window = 0, 0, localcoordX, localcoordY
 	overlay.col = 0, 0, 0
-	overlay.alpha = 20, 100
+	overlay.alpha = 0, 128
 
 [Infobox Text]
 "Welcome to SUEHIRO's I.K.E.M.E.N GO engine!
@@ -346,8 +346,8 @@
 * This build may contain bugs and incomplete features.
 * Your help and cooperation are appreciated!
 * Original repo source code: https://osdn.net/users/supersuehiro/
-* Bug reports: https://github.com/Windblade-GR01/Ikemen-GO/issues
-* Features wiki: https://github.com/K4thos/Ikemen.GO/wiki"
+* Bug reports: https://github.com/ikemen-engine/Ikemen-GO/issues
+* Features wiki: https://github.com/ikemen-engine/Ikemen-GO/wiki"
 
 ;[ja.Infobox Text]
 	; Not used in Ikemen
@@ -564,10 +564,15 @@
 	searchemptyboxesup = 0
 	searchemptyboxesdown = 0
 
-	; Offset and facing adjustment on per cell basis, <col> and <row> should be
-	; replaced with cell x, y coordinates, starting from index 0.
+	; Adjustments on per cell basis, <col> and <row> should be replaced with
+	; cell x, y coordinates, starting from index 0.
 	;cell.<col>.<row>.offset = 0, 0
 	;cell.<col>.<row>.facing = 1
+	; Set to 1 to mark slot as dummy cell, without bloating select.def
+	;cell.<col>.<row>.skip = 1
+
+	; ticks between blinks when p2.cursor.blink = 1
+	p2.cursor.switchtime = 3
 
 	; cursor parameters defaults to p1 and p2 values, if not specified
 	;p<pn>.cursor.startcell = 0, 0
@@ -943,7 +948,7 @@
 	p2.face2.window = 
 
 	; Set to 1 to enable order selection
-	; https://github.com/K4thos/Ikemen_GO/wiki/Miscellaneous-Info#orderselect
+	; https://github.com/ikemen-engine/Ikemen-GO/wiki/Miscellaneous-Info#orderselect
 	orderselect.enabled = 0
 
 	; By default all action buttons confirm currently selected order.
@@ -1106,7 +1111,7 @@
 
 	;overlay.window = 0, 0, localcoordX, localcoordY
 	overlay.col = 0, 0, 0
-	overlay.alpha = 20, 100
+	overlay.alpha = 0, 128
 
 	p1.state = 5500, 5300
 	p1.yes.state = 5510, 180
@@ -1259,7 +1264,7 @@
 
 	;overlay.window = 0, 0, localcoordX, localcoordY
 	overlay.col = 0, 0, 0
-	overlay.alpha = 20, 100
+	overlay.alpha = 0, 128
 
 	p1.state = 
 	p2.state = 
@@ -1294,7 +1299,7 @@
 
 	;overlay.window = 0, 0, localcoordX, localcoordY
 	overlay.col = 0, 0, 0
-	overlay.alpha = 20, 100
+	overlay.alpha = 0, 128
 
 	p1.state = 180
 	p2.state = 
@@ -1339,7 +1344,7 @@
 
 	;overlay.window = 0, 0, localcoordX, localcoordY
 	overlay.col = 0, 0, 0
-	overlay.alpha = 20, 100
+	overlay.alpha = 0, 128
 
 	p1.state = 175, 170
 	p1.win.state = 180
@@ -1374,7 +1379,7 @@
 
 	;overlay.window = 0, 0, localcoordX, localcoordY
 	overlay.col = 0, 0, 0
-	overlay.alpha = 20, 100
+	overlay.alpha = 0, 128
 
 	p1.state = 175, 170
 	p1.win.state = 180
@@ -1473,7 +1478,7 @@
 	menu.boxcursor.alpharange = 10, 40, 2, 255, 255, 0
 	menu.boxbg.visible = 1
 	menu.boxbg.col = 0, 0, 0
-	menu.boxbg.alpha = 20, 100
+	menu.boxbg.alpha = 0, 128
 
 	menu.arrow.up.anim = -1
 	menu.arrow.up.spr = 
@@ -1555,9 +1560,9 @@
 	textinput.resheight.text = "Type in screen height.\nPress ENTER to accept.\nPress ESC to cancel."
 	;textinput.overlay.window = 0, 0, localcoordX, localcoordY
 	textinput.overlay.col = 0, 0, 0
-	textinput.overlay.alpha = 20, 100
+	textinput.overlay.alpha = 0, 128
 
-	; https://github.com/K4thos/Ikemen_GO/wiki/Screenpack-features#submenus
+	; https://github.com/ikemen-engine/Ikemen-GO/wiki/Screenpack-features#submenus
 	; If custom menu is not declared, following menu is loaded by default:
 	menu.itemname.menugame = "Game Settings"
 	menu.itemname.menugame.difficulty = "Difficulty Level"
@@ -1729,7 +1734,7 @@
 	menu.boxcursor.alpharange = 10, 40, 2, 255, 255, 0
 	menu.boxbg.visible = 1
 	menu.boxbg.col = 0, 0, 0
-	menu.boxbg.alpha = 20, 100
+	menu.boxbg.alpha = 0, 128
 	menu.arrow.up.anim = -1
 	menu.arrow.up.spr = 
 	menu.arrow.up.offset = 0, 0
@@ -1808,7 +1813,7 @@
 	menu.boxcursor.alpharange = 10, 40, 2, 255, 255, 0
 	menu.boxbg.visible = 1
 	menu.boxbg.col = 0, 0, 0
-	menu.boxbg.alpha = 20, 100
+	menu.boxbg.alpha = 0, 128
 	menu.arrow.up.anim = -1
 	menu.arrow.up.spr = 
 	menu.arrow.up.offset = 0, 0
@@ -1823,7 +1828,7 @@
 
 	;overlay.window = 0, 0, localcoordX, localcoordY
 	overlay.col = 0, 0, 0
-	overlay.alpha = 20, 100
+	overlay.alpha = 0, 128
 
 	cursor.move.snd = 100, 0
 	cursor.done.snd = 100, 1
@@ -1849,7 +1854,7 @@
 	movelist.window.visibleitems = 18
 	;movelist.overlay.window = 0, 0, localcoordX, localcoordY
 	movelist.overlay.col = 0, 0, 0
-	movelist.overlay.alpha = 20, 100
+	movelist.overlay.alpha = 0, 128
 	movelist.arrow.up.anim = -1
 	movelist.arrow.up.spr = 
 	movelist.arrow.up.offset = 0, 0
@@ -1861,7 +1866,7 @@
 	movelist.arrow.down.facing = 1
 	movelist.arrow.down.scale = 1.0, 1.0
 
-	; https://github.com/K4thos/Ikemen_GO/wiki/Screenpack-features#submenus
+	; https://github.com/ikemen-engine/Ikemen-GO/wiki/Screenpack-features#submenus
 	; If custom menu is not declared, following menu is loaded by default:
 	menu.itemname.back = "Continue"
 	menu.itemname.menuinput = "Button Config"
@@ -1917,7 +1922,7 @@
 	menu.valuename.buttonjam.d = "D"
 	menu.valuename.buttonjam.w = "W"
 
-	; https://github.com/K4thos/Ikemen_GO/wiki/Screenpack-features#submenus
+	; https://github.com/ikemen-engine/Ikemen-GO/wiki/Screenpack-features#submenus
 	; If custom menu is not declared, following menu is loaded by default:
 	menu.itemname.back = "Continue"
 	menu.itemname.menutraining = "Training Menu"
@@ -1947,7 +1952,7 @@
 	bgclearcolor = 0, 0, 0
 
 [Attract Mode] ;Ikemen feature
-	; https://github.com/K4thos/Ikemen_GO/wiki/Miscellaneous-Info/#attract
+	; https://github.com/ikemen-engine/Ikemen-GO/wiki/Miscellaneous-Info/#attract
 	enabled = 0
 	fadein.time = 10
 	fadein.col = 0, 0, 0
@@ -2029,7 +2034,7 @@
 	menu.boxcursor.alpharange = 10, 40, 2, 255, 255, 0
 	menu.boxbg.visible = 0
 	menu.boxbg.col = 0, 0, 0
-	menu.boxbg.alpha = 20, 100
+	menu.boxbg.alpha = 0, 128
 	menu.arrow.up.anim = -1
 	menu.arrow.up.spr = 
 	menu.arrow.up.offset = 0, 0
@@ -2084,7 +2089,7 @@
 	spr = ""
 
 [Dialogue Info] ;WARNING: Will be moved to "fight.def"
-	; https://github.com/K4thos/Ikemen_GO/wiki/State-controllers/#new_dialogue
+	; https://github.com/ikemen-engine/Ikemen-GO/wiki/State-controllers/#new_dialogue
 	enabled = 0
 	endtime = 0
 	switchtime = 0
@@ -2248,7 +2253,7 @@
 	window.visibleitems = 10
 	;overlay.window = 0, 0, localcoordX, localcoordY
 	overlay.col = 0, 0, 0
-	overlay.alpha = 20, 100
+	overlay.alpha = 0, 128
 	move.snd = 100, 0
 	done.snd = 100, 1
 	cancel.snd = 100, 2
@@ -2266,6 +2271,7 @@
 	text.offset = 25, 33
 	text.font = "f-6x9.def", 0, 1, 255, 255, 255, -1
 	text.scale = 1.0, 1.0
+	text.ratio.text = "Incorrect 'arcade.ratiomatches' settings detected.\nRefer to tutorial available in default select.def."
 	text.reload.text = "Some selected options require Ikemen to be restarted.\nPress any key to exit the program."
 	text.noreload.text = "Some selected options require Ikemen to be restarted.\nPress any key to continue."
 	text.keys.text = "Conflict between button keys detected.\nAll keys should have unique assignment.\n\nPress any key to continue.\nPress ESC to reset."
@@ -2273,6 +2279,6 @@
 	text.shaders.text = "No external OpenGL shaders detected.\nIkemen GO supports files with .vert and .frag extensions.\nShaders are loaded from \'./external/shaders' directory."
 	;overlay.window = 0, 0, localcoordX, localcoordY
 	overlay.col = 0, 0, 0
-	overlay.alpha = 20, 100
+	overlay.alpha = 0, 128
 	done.snd = 100, 0
 	cancel.snd = 100, 2
