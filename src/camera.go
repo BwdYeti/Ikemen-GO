@@ -209,3 +209,13 @@ func (c *Camera) action(x, y *float32, leftest, rightest, lowest, highest,
 	}
 	return
 }
+
+type activeCamera struct {
+    x, y float32
+    scl  float32
+}
+
+func (ac *activeCamera) reset(c *Camera) {
+    ac.x, ac.y = 0, 0
+    ac.scl = c.startzoom
+}
