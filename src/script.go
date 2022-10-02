@@ -947,7 +947,7 @@ func systemScriptInit(l *lua.LState) {
 						sys.stage = nil
 					}
 					if sys.reloadLifebarFlg {
-						sys.lifebar.reloadLifebar()
+						sys.lifebar.reloadLifebar(&sys.gs.lb)
 					}
 					sys.loaderReset()
 					winp = -2
@@ -1987,7 +1987,7 @@ func systemScriptInit(l *lua.LState) {
 			}
 		}
 		if _, ok := sys.lifebar.tr.enabled[sys.gameMode]; ok {
-			sys.lifebar.tr.active = sys.lifebar.tr.enabled[sys.gameMode]
+			sys.gs.lb.tr.active = sys.lifebar.tr.enabled[sys.gameMode]
 		}
 		// elements forced by lua scripts
 		tableArg(l, 1).ForEach(func(key, value lua.LValue) {
@@ -2023,7 +2023,7 @@ func systemScriptInit(l *lua.LState) {
 				case "stunbar": //enabled depending on config.json
 					sys.lifebar.stunbar = lua.LVAsBool(value)
 				case "timer":
-					sys.lifebar.tr.active = lua.LVAsBool(value)
+					sys.gs.lb.tr.active = lua.LVAsBool(value)
 				default:
 					l.RaiseError("\nInvalid table key: %v\n", k)
 				}

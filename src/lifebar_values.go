@@ -66,11 +66,20 @@ func newLifeBarRoundValues() *LifeBarRoundValues {
 		match_maxdrawgames: [...]int32{1, 1}}
 }
 
+type LifeBarTimerValues struct {
+	active bool
+}
+
+func newLifeBarTimerValues() *LifeBarTimerValues {
+	return &LifeBarTimerValues{}
+}
+
 type LifebarValues struct {
 	hb [8][]HealthBarValues
 	co [2]LifeBarComboValues
 	ac [2]LifeBarActionValues
 	ro LifeBarRoundValues
+	tr LifeBarTimerValues
 }
 
 func (lbv *LifebarValues) clone() (result *LifebarValues) {

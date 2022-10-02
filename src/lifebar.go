@@ -2458,7 +2458,6 @@ type LifeBarTimer struct {
 	bg      AnimLayout
 	top     AnimLayout
 	enabled map[string]bool
-	active  bool
 }
 
 func newLifeBarTimer() *LifeBarTimer {
@@ -2490,13 +2489,13 @@ func (tr *LifeBarTimer) reset() {
 	tr.bg.Reset()
 	tr.top.Reset()
 }
-func (tr *LifeBarTimer) bgDraw(layerno int16) {
-	if tr.active {
+func (tr *LifeBarTimer) bgDraw(layerno int16, trv *LifeBarTimerValues) {
+	if trv.active {
 		tr.bg.Draw(float32(tr.pos[0])+sys.lifebarOffsetX, float32(tr.pos[1]), layerno, sys.lifebarScale)
 	}
 }
-func (tr *LifeBarTimer) draw(layerno int16, f []*Fnt) {
-	if tr.active && sys.lifebar.ti.framespercount > 0 &&
+func (tr *LifeBarTimer) draw(layerno int16, trv *LifeBarTimerValues, f []*Fnt) {
+	if trv.active && sys.lifebar.ti.framespercount > 0 &&
 		tr.text.font[0] >= 0 && int(tr.text.font[0]) < len(f) && f[tr.text.font[0]] != nil && sys.gs.time >= 0 {
 		text := tr.text.text
 		totalSec := float64(timeTotal()) / 60
@@ -3376,6 +3375,7 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "timer":
 			if l.tr == nil {
+				lbv.tr = *newLifeBarTimerValues()
 				l.tr = readLifeBarTimer(is, l.sff, l.at, l.fnt[:])
 			}
 		case "score":
@@ -3509,12 +3509,9 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 	l.deffile = deffile
 	return l, lbv, nil
 }
-func (l *Lifebar) reloadLifebar() {
-	oldLbv := &sys.gs.lb
-
+func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lb, lbv, _ := loadLifebar(l.deffile)
 	lb.ti.framespercount = l.ti.framespercount
-	lb.tr.active = l.tr.active
 	lb.sc[0].active = l.sc[0].active
 	lb.sc[1].active = l.sc[1].active
 	lb.ma.active = l.ma.active
@@ -3529,8 +3526,10 @@ func (l *Lifebar) reloadLifebar() {
 	lb.guardbar = l.guardbar
 	lb.stunbar = l.stunbar
 	lb.fx_scale = l.fx_scale
+
 	lbv.ro.match_maxdrawgames = oldLbv.ro.match_maxdrawgames
 	lbv.ro.match_wins = oldLbv.ro.match_wins
+	lbv.tr.active = oldLbv.tr.active
 
 	sys.lifebar = *lb
 	sys.gs.lb = *lbv
@@ -3857,8 +3856,8 @@ func (l *Lifebar) draw(layerno int16) {
 				}
 			}
 			//LifeBarTimer
-			l.tr.bgDraw(layerno)
-			l.tr.draw(layerno, l.fnt[:])
+			l.tr.bgDraw(layerno, &sys.gs.lb.tr)
+			l.tr.draw(layerno, &sys.gs.lb.tr, l.fnt[:])
 			//LifeBarScore
 			for i := range l.sc {
 				l.sc[i].bgDraw(layerno)
