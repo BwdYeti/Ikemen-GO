@@ -23,6 +23,16 @@ func newPowerBarValues() *PowerBarValues {
 	return &PowerBarValues{}
 }
 
+type GuardBarValues struct {
+	midpower    float32
+	midpowerMin float32
+}
+
+func newGuardBarValues() (gb *GuardBarValues) {
+	gb = &GuardBarValues{}
+	return
+}
+
 type LifeBarFaceValues struct {
 	face             *Sprite
 	old_spr, old_pal [2]int32
@@ -153,6 +163,7 @@ func newLifeBarWinCountValues() *LifeBarWinCountValues {
 type LifebarValues struct {
 	hb [8][]HealthBarValues
 	pb [8][]PowerBarValues
+	gb [8][]GuardBarValues
 	fa [8][]LifeBarFaceValues
 	wi [2]LifeBarWinIconValues
 	co [2]LifeBarComboValues
@@ -179,6 +190,11 @@ func (lbv *LifebarValues) clone() (result *LifebarValues) {
 	for i := range lbv.pb {
 		result.pb[i] = make([]PowerBarValues, len(lbv.pb[i]))
 		copy(result.pb[i], lbv.pb[i])
+	}
+
+	for i := range lbv.gb {
+		result.gb[i] = make([]GuardBarValues, len(lbv.gb[i]))
+		copy(result.gb[i], lbv.gb[i])
 	}
 
 	for i := range lbv.fa {

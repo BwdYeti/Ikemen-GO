@@ -588,8 +588,6 @@ type GuardBar struct {
 	value       LbText
 	front       map[float32]*AnimLayout
 	shift       AnimLayout
-	midpower    float32
-	midpowerMin float32
 	//prevLevel   int32
 }
 
@@ -627,7 +625,7 @@ func readGuardBar(pre string, is IniSection,
 	gb.warn = *ReadAnimLayout(pre+"warn.", is, sff, at, 0)
 	return gb
 }
-func (gb *GuardBar) step(ref int, gbr *GuardBar, snd *Snd) {
+func (gb *GuardBar) step(ref int, gbv *GuardBarValues, snd *Snd) {
 	if !sys.lifebar.guardbar {
 		return
 	}
@@ -635,14 +633,14 @@ func (gb *GuardBar) step(ref int, gbr *GuardBar, snd *Snd) {
 	power := float32(p.guardPoints) / float32(p.guardPointsMax)
 	gb.shift.anim.srcAlpha = int16(255 * (1 - power))
 	gb.shift.anim.dstAlpha = int16(255 * power)
-	gbr.midpower -= 1.0 / 144
-	if power < gbr.midpowerMin {
-		gbr.midpowerMin += (power - gbr.midpowerMin) * (1 / (12 - (power-gbr.midpowerMin)*144))
+	gbv.midpower -= 1.0 / 144
+	if power < gbv.midpowerMin {
+		gbv.midpowerMin += (power - gbv.midpowerMin) * (1 / (12 - (power-gbv.midpowerMin)*144))
 	} else {
-		gbr.midpowerMin = power
+		gbv.midpowerMin = power
 	}
-	if gbr.midpower < gbr.midpowerMin {
-		gbr.midpower = gbr.midpowerMin
+	if gbv.midpower < gbv.midpowerMin {
+		gbv.midpower = gbv.midpowerMin
 	}
 	gb.bg0.Action()
 	gb.bg1.Action()
@@ -681,7 +679,7 @@ func (gb *GuardBar) bgDraw(layerno int16) {
 	gb.bg1.Draw(float32(gb.pos[0])+sys.lifebarOffsetX, float32(gb.pos[1]), layerno, sys.lifebarScale)
 	gb.bg2.Draw(float32(gb.pos[0])+sys.lifebarOffsetX, float32(gb.pos[1]), layerno, sys.lifebarScale)
 }
-func (gb *GuardBar) draw(layerno int16, ref int, gbr *GuardBar, f []*Fnt) {
+func (gb *GuardBar) draw(layerno int16, ref int, gbv *GuardBarValues, f []*Fnt) {
 	if !sys.lifebar.guardbar {
 		return
 	}
@@ -699,7 +697,7 @@ func (gb *GuardBar) draw(layerno int16, ref int, gbr *GuardBar, f []*Fnt) {
 		}
 		return
 	}
-	pr, mr := width(power), width(gbr.midpower)
+	pr, mr := width(power), width(gbv.midpower)
 	if gb.range_x[0] < gb.range_x[1] {
 		mr[0] += pr[2]
 	}
@@ -2897,6 +2895,9 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 		pb: [...][]PowerBarValues{make([]PowerBarValues, 2), make([]PowerBarValues, 8),
 			make([]PowerBarValues, 2), make([]PowerBarValues, 8), make([]PowerBarValues, 6),
 			make([]PowerBarValues, 8), make([]PowerBarValues, 6), make([]PowerBarValues, 8)},
+		gb: [...][]GuardBarValues{make([]GuardBarValues, 2), make([]GuardBarValues, 8),
+			make([]GuardBarValues, 2), make([]GuardBarValues, 8), make([]GuardBarValues, 6),
+			make([]GuardBarValues, 8), make([]GuardBarValues, 6), make([]GuardBarValues, 8)},
 		fa: [...][]LifeBarFaceValues{make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8),
 			make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6),
 			make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6), make([]LifeBarFaceValues, 8)}}
@@ -3056,9 +3057,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "guardbar":
 			if l.gb[0][0] == nil {
+				lbv.gb[0][0] = *newGuardBarValues()
 				l.gb[0][0] = readGuardBar("p1.", is, l.sff, l.at, l.fnt[:])
 			}
 			if l.gb[0][1] == nil {
+				lbv.gb[0][1] = *newGuardBarValues()
 				l.gb[0][1] = readGuardBar("p2.", is, l.sff, l.at, l.fnt[:])
 			}
 		case "stunbar":
@@ -3107,9 +3110,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 				}
 			case len(subname) >= 8 && subname[:8] == "guardbar":
 				if l.gb[2][0] == nil {
+					lbv.gb[2][0] = *newGuardBarValues()
 					l.gb[2][0] = readGuardBar("p1.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.gb[2][1] == nil {
+					lbv.gb[2][1] = *newGuardBarValues()
 					l.gb[2][1] = readGuardBar("p2.", is, l.sff, l.at, l.fnt[:])
 				}
 			case len(subname) >= 7 && subname[:7] == "stunbar":
@@ -3224,28 +3229,36 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 				}
 			case len(subname) >= 8 && subname[:8] == "guardbar":
 				if l.gb[i][0] == nil {
+					lbv.gb[i][0] = *newGuardBarValues()
 					l.gb[i][0] = readGuardBar("p1.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.gb[i][1] == nil {
+					lbv.gb[i][1] = *newGuardBarValues()
 					l.gb[i][1] = readGuardBar("p2.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.gb[i][2] == nil {
+					lbv.gb[i][2] = *newGuardBarValues()
 					l.gb[i][2] = readGuardBar("p3.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.gb[i][3] == nil {
+					lbv.gb[i][3] = *newGuardBarValues()
 					l.gb[i][3] = readGuardBar("p4.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.gb[i][4] == nil {
+					lbv.gb[i][4] = *newGuardBarValues()
 					l.gb[i][4] = readGuardBar("p5.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.gb[i][5] == nil {
+					lbv.gb[i][5] = *newGuardBarValues()
 					l.gb[i][5] = readGuardBar("p6.", is, l.sff, l.at, l.fnt[:])
 				}
 				if i != 4 && i != 6 {
 					if l.gb[i][6] == nil {
+						lbv.gb[i][6] = *newGuardBarValues()
 						l.gb[i][6] = readGuardBar("p7.", is, l.sff, l.at, l.fnt[:])
 					}
 					if l.gb[i][7] == nil {
+						lbv.gb[i][7] = *newGuardBarValues()
 						l.gb[i][7] = readGuardBar("p8.", is, l.sff, l.at, l.fnt[:])
 					}
 				}
@@ -3592,7 +3605,7 @@ func (l *Lifebar) step() {
 			//PowerBar
 			l.pb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.pb[l.ref[ti]][v], l.snd)
 			//GuardBar
-			l.gb[l.ref[ti]][i*2+ti].step(v, l.gb[l.ref[ti]][v], l.snd)
+			l.gb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.gb[l.ref[ti]][v], l.snd)
 			//StunBar
 			l.sb[l.ref[ti]][i*2+ti].step(v, l.sb[l.ref[ti]][v], l.snd)
 			//LifeBarFace
@@ -3821,7 +3834,7 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			for ti := range sys.tmode {
 				for i, v := range l.order[ti] {
-					l.gb[l.ref[ti]][i*2+ti].draw(layerno, v, l.gb[l.ref[ti]][v], l.fnt[:])
+					l.gb[l.ref[ti]][i*2+ti].draw(layerno, v, &sys.gs.lb.gb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//StunBar
