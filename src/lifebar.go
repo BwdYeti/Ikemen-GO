@@ -3584,7 +3584,7 @@ func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	sys.lifebar = *lb
 	sys.gs.lb = *lbv
 }
-func (l *Lifebar) step() {
+func (l *Lifebar) step(lbv *LifebarValues) {
 	if sys.paused && !sys.step {
 		return
 	}
@@ -3614,22 +3614,22 @@ func (l *Lifebar) step() {
 	for ti := range sys.tmode {
 		for i, v := range l.order[ti] {
 			//HealthBar
-			l.hb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.hb[l.ref[ti]][v])
+			l.hb[l.ref[ti]][i*2+ti].step(v, &lbv.hb[l.ref[ti]][v])
 			//PowerBar
-			l.pb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.pb[l.ref[ti]][v], l.snd)
+			l.pb[l.ref[ti]][i*2+ti].step(v, &lbv.pb[l.ref[ti]][v], l.snd)
 			//GuardBar
-			l.gb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.gb[l.ref[ti]][v], l.snd)
+			l.gb[l.ref[ti]][i*2+ti].step(v, &lbv.gb[l.ref[ti]][v], l.snd)
 			//StunBar
-			l.sb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.sb[l.ref[ti]][v], l.snd)
+			l.sb[l.ref[ti]][i*2+ti].step(v, &lbv.sb[l.ref[ti]][v], l.snd)
 			//LifeBarFace
-			l.fa[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.fa[l.ref[ti]][v])
+			l.fa[l.ref[ti]][i*2+ti].step(v, &lbv.fa[l.ref[ti]][v])
 			//LifeBarName
 			l.nm[l.ref[ti]][i*2+ti].step()
 		}
 	}
 	//LifeBarWinIcon
 	for i := range l.wi {
-		l.wi[i].step(sys.wins[i], &sys.gs.lb.wi[i])
+		l.wi[i].step(sys.wins[i], &lbv.wi[i])
 	}
 	//LifeBarTime
 	l.ti.step()
@@ -3654,11 +3654,11 @@ func (l *Lifebar) step() {
 		}
 	}
 	for i := range l.co {
-		l.co[i].step(&sys.gs.lb.co[i], cb[i], fcb[i], cd[i], cp[i], st[i])
+		l.co[i].step(&lbv.co[i], cb[i], fcb[i], cd[i], cp[i], st[i])
 	}
 	//LifeBarAction
 	for i := range l.ac {
-		l.ac[i].step(l.order[i][0], &sys.gs.lb.ac[i])
+		l.ac[i].step(l.order[i][0], &lbv.ac[i])
 	}
 	//LifeBarRatio
 	for ti, tm := range sys.tmode {
@@ -3700,7 +3700,7 @@ func (l *Lifebar) step() {
 		}
 	}
 }
-func (l *Lifebar) reset() {
+func (l *Lifebar) reset(lbv *LifebarValues) {
 	var num [2]int
 	for ti, tm := range sys.tmode {
 		l.ref[ti] = int(tm)
@@ -3757,7 +3757,7 @@ func (l *Lifebar) reset() {
 	}
 	for i := range l.fa {
 		for j := range l.fa[i] {
-			l.fa[i][j].reset(&sys.gs.lb.fa[i][j])
+			l.fa[i][j].reset(&lbv.fa[i][j])
 		}
 	}
 	for _, nm := range l.nm {
@@ -3766,22 +3766,22 @@ func (l *Lifebar) reset() {
 		}
 	}
 	for i := range l.wi {
-		l.wi[i].reset(&sys.gs.lb.wi[i])
+		l.wi[i].reset(&lbv.wi[i])
 	}
 	l.ti.reset()
 	for i := range l.co {
-		l.co[i].reset(&sys.gs.lb.co[i])
+		l.co[i].reset(&lbv.co[i])
 	}
 	for i := range l.ac {
-		l.ac[i].reset(l.order[i][0], &sys.gs.lb.ac[i])
+		l.ac[i].reset(l.order[i][0], &lbv.ac[i])
 	}
-	l.ro.reset(&sys.gs.lb.ro)
+	l.ro.reset(&lbv.ro)
 	for i := range l.ra {
 		l.ra[i].reset()
 	}
 	l.tr.reset()
 	for i := range l.sc {
-		l.sc[i].reset(&sys.gs.lb.sc[i])
+		l.sc[i].reset(&lbv.sc[i])
 	}
 	l.ma.reset()
 	for i := range l.ai {
@@ -3795,7 +3795,7 @@ func (l *Lifebar) reset() {
 	}
 	l.textsprite = []*TextSprite{}
 }
-func (l *Lifebar) draw(layerno int16) {
+func (l *Lifebar) draw(layerno int16, lbv *LifebarValues) {
 	if sys.postMatchFlg || sys.dialogueBarsFlg {
 		return
 	}
@@ -3809,7 +3809,7 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			for ti := range sys.tmode {
 				for i, v := range l.order[ti] {
-					l.hb[l.ref[ti]][i*2+ti].draw(layerno, v, &sys.gs.lb.hb[l.ref[ti]][v], l.fnt[:])
+					l.hb[l.ref[ti]][i*2+ti].draw(layerno, v, &lbv.hb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//PowerBar
@@ -3831,10 +3831,10 @@ func (l *Lifebar) draw(layerno int16) {
 					if !sys.getChar(i*2+ti, 0).sf(CSF_nopowerbardisplay) {
 						if sys.powerShare[ti] && (tm == TM_Simul || tm == TM_Tag) {
 							if i == 0 {
-								l.pb[l.ref[ti]][i*2+ti].draw(layerno, i*2+ti, &sys.gs.lb.pb[l.ref[ti]][i*2+ti], l.fnt[:])
+								l.pb[l.ref[ti]][i*2+ti].draw(layerno, i*2+ti, &lbv.pb[l.ref[ti]][i*2+ti], l.fnt[:])
 							}
 						} else {
-							l.pb[l.ref[ti]][i*2+ti].draw(layerno, v, &sys.gs.lb.pb[l.ref[ti]][v], l.fnt[:])
+							l.pb[l.ref[ti]][i*2+ti].draw(layerno, v, &lbv.pb[l.ref[ti]][v], l.fnt[:])
 						}
 					}
 				}
@@ -3847,7 +3847,7 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			for ti := range sys.tmode {
 				for i, v := range l.order[ti] {
-					l.gb[l.ref[ti]][i*2+ti].draw(layerno, v, &sys.gs.lb.gb[l.ref[ti]][v], l.fnt[:])
+					l.gb[l.ref[ti]][i*2+ti].draw(layerno, v, &lbv.gb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//StunBar
@@ -3858,7 +3858,7 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			for ti := range sys.tmode {
 				for i, v := range l.order[ti] {
-					l.sb[l.ref[ti]][i*2+ti].draw(layerno, v, &sys.gs.lb.sb[l.ref[ti]][v], l.fnt[:])
+					l.sb[l.ref[ti]][i*2+ti].draw(layerno, v, &lbv.sb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//LifeBarFace
@@ -3869,7 +3869,7 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			for ti := range sys.tmode {
 				for i, v := range l.order[ti] {
-					l.fa[l.ref[ti]][i*2+ti].draw(layerno, v, l.fa[l.ref[ti]][v], &sys.gs.lb.fa[l.ref[ti]][v])
+					l.fa[l.ref[ti]][i*2+ti].draw(layerno, v, l.fa[l.ref[ti]][v], &lbv.fa[l.ref[ti]][v])
 				}
 			}
 			//LifeBarName
@@ -3888,7 +3888,7 @@ func (l *Lifebar) draw(layerno int16) {
 			l.ti.draw(layerno, l.fnt[:])
 			//LifeBarWinIcon
 			for i := range l.wi {
-				l.wi[i].draw(layerno, &sys.gs.lb.wi[i], l.fnt[:], i)
+				l.wi[i].draw(layerno, &lbv.wi[i], l.fnt[:], i)
 			}
 			//LifeBarRatio
 			for ti, tm := range sys.tmode {
@@ -3906,40 +3906,40 @@ func (l *Lifebar) draw(layerno int16) {
 				}
 			}
 			//LifeBarTimer
-			l.tr.bgDraw(layerno, &sys.gs.lb.tr)
-			l.tr.draw(layerno, &sys.gs.lb.tr, l.fnt[:])
+			l.tr.bgDraw(layerno, &lbv.tr)
+			l.tr.draw(layerno, &lbv.tr, l.fnt[:])
 			//LifeBarScore
 			for i := range l.sc {
-				l.sc[i].bgDraw(layerno, &sys.gs.lb.sc[i])
+				l.sc[i].bgDraw(layerno, &lbv.sc[i])
 			}
 			for i := range l.sc {
-				l.sc[i].draw(layerno, &sys.gs.lb.sc[i], l.fnt[:], i)
+				l.sc[i].draw(layerno, &lbv.sc[i], l.fnt[:], i)
 			}
 			//LifeBarMatch
-			l.ma.bgDraw(layerno, &sys.gs.lb.ma)
-			l.ma.draw(layerno, &sys.gs.lb.ma, l.fnt[:])
+			l.ma.bgDraw(layerno, &lbv.ma)
+			l.ma.draw(layerno, &lbv.ma, l.fnt[:])
 			//LifeBarAiLevel
 			for i := range l.ai {
-				l.ai[i].bgDraw(layerno, &sys.gs.lb.ai[i])
+				l.ai[i].bgDraw(layerno, &lbv.ai[i])
 			}
 			for i := range l.ai {
-				l.ai[i].draw(layerno, &sys.gs.lb.ai[i], l.fnt[:], sys.com[sys.getChar(i, 0).playerNo])
+				l.ai[i].draw(layerno, &lbv.ai[i], l.fnt[:], sys.com[sys.getChar(i, 0).playerNo])
 			}
 			//LifeBarWinCount
 			for i := range l.wc {
-				l.wc[i].bgDraw(layerno, &sys.gs.lb.wc[i])
+				l.wc[i].bgDraw(layerno, &lbv.wc[i])
 			}
 			for i := range l.wc {
-				l.wc[i].draw(layerno, &sys.gs.lb.wc[i], l.fnt[:], i)
+				l.wc[i].draw(layerno, &lbv.wc[i], l.fnt[:], i)
 			}
 		}
 		//LifeBarCombo
 		for i := range l.co {
-			l.co[i].draw(layerno, &sys.gs.lb.co[i], l.fnt[:], i)
+			l.co[i].draw(layerno, &lbv.co[i], l.fnt[:], i)
 		}
 		//LifeBarAction
 		for i := range l.ac {
-			l.ac[i].draw(layerno, &sys.gs.lb.ac[i], l.fnt[:], i)
+			l.ac[i].draw(layerno, &lbv.ac[i], l.fnt[:], i)
 		}
 		//LifeBarMode
 		if _, ok := l.mo[sys.gameMode]; ok {
@@ -3949,7 +3949,7 @@ func (l *Lifebar) draw(layerno int16) {
 	}
 	if l.active {
 		//LifeBarRound
-		l.ro.draw(layerno, &sys.gs.lb.ro, l.fnt[:])
+		l.ro.draw(layerno, &lbv.ro, l.fnt[:])
 	}
 	//Text sctrl
 	for _, v := range l.textsprite {

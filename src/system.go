@@ -897,7 +897,7 @@ func (s *System) playerClear(pn int, destroy bool) {
 }
 func (s *System) nextRound() {
 	s.resetGblEffect()
-	s.lifebar.reset()
+	s.lifebar.reset(&s.gs.lb)
 	s.finish = FT_NotYet
 	s.winTeam = -1
 	s.winType = [...]WinType{WT_N, WT_N}
@@ -1180,7 +1180,7 @@ func (s *System) action(x, y, scl *float32) {
 	} else {
 		s.charUpdate(&cvmin, &cvmax, &highest, &lowest, &leftest, &rightest)
 	}
-	s.lifebar.step()
+	s.lifebar.step(&s.gs.lb)
 
 	// Action camera
 	var newx, newy float32 = *x, *y
@@ -1600,8 +1600,8 @@ func (s *System) draw(x, y, scl float32) {
 		//	rect[0] = s.scrrect[2] - rect[2]
 		//	fade(rect, 0, 255)
 		//}
-		s.lifebar.draw(-1)
-		s.lifebar.draw(0)
+		s.lifebar.draw(-1, &s.gs.lb)
+		s.lifebar.draw(0, &s.gs.lb)
 	} else {
 		FillRect(s.scrrect, ecol, 255)
 	}
@@ -1611,9 +1611,9 @@ func (s *System) draw(x, y, scl float32) {
 			s.stage.draw(true, bgx, bgy, scl)
 		}
 	}
-	s.lifebar.draw(1)
+	s.lifebar.draw(1, &s.gs.lb)
 	s.topSprites.draw(x, y, scl*s.gs.cam.BaseScale())
-	s.lifebar.draw(2)
+	s.lifebar.draw(2, &s.gs.lb)
 }
 func (s *System) drawTop() {
 	fade := func(rect [4]int32, color uint32, alpha int32) {
