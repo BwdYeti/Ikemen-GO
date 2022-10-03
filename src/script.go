@@ -1969,7 +1969,7 @@ func systemScriptInit(l *lua.LState) {
 	luaRegister(l, "setLifebarElements", func(*lua.LState) int {
 		// elements enabled via fight.def, depending on game mode
 		if _, ok := sys.lifebar.ma.enabled[sys.gameMode]; ok {
-			sys.lifebar.ma.active = sys.lifebar.ma.enabled[sys.gameMode]
+			sys.gs.lb.ma.active = sys.lifebar.ma.enabled[sys.gameMode]
 		}
 		for _, v := range sys.lifebar.ai {
 			if _, ok := v.enabled[sys.gameMode]; ok {
@@ -2005,7 +2005,7 @@ func systemScriptInit(l *lua.LState) {
 				case "hidebars": //enabled depending on dialogue system.def settings
 					sys.lifebar.hidebars = lua.LVAsBool(value)
 				case "match":
-					sys.lifebar.ma.active = lua.LVAsBool(value)
+					sys.gs.lb.ma.active = lua.LVAsBool(value)
 				case "mode": //enabled by default
 					sys.lifebar.mode = lua.LVAsBool(value)
 				case "p1aiLevel":

@@ -83,6 +83,14 @@ func newLifeBarScoreValues() *LifeBarScoreValues {
 	return &LifeBarScoreValues{}
 }
 
+type LifeBarMatchValues struct {
+	active bool
+}
+
+func newLifeBarMatchValues() *LifeBarMatchValues {
+	return &LifeBarMatchValues{}
+}
+
 type LifebarValues struct {
 	hb [8][]HealthBarValues
 	co [2]LifeBarComboValues
@@ -90,6 +98,7 @@ type LifebarValues struct {
 	ro LifeBarRoundValues
 	tr LifeBarTimerValues
 	sc [2]LifeBarScoreValues
+	ma LifeBarMatchValues
 }
 
 func (lbv *LifebarValues) clone() (result *LifebarValues) {

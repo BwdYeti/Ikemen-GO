@@ -2640,7 +2640,6 @@ type LifeBarMatch struct {
 	bg      AnimLayout
 	top     AnimLayout
 	enabled map[string]bool
-	active  bool
 }
 
 func newLifeBarMatch() *LifeBarMatch {
@@ -2672,13 +2671,13 @@ func (ma *LifeBarMatch) reset() {
 	ma.bg.Reset()
 	ma.top.Reset()
 }
-func (ma *LifeBarMatch) bgDraw(layerno int16) {
-	if ma.active {
+func (ma *LifeBarMatch) bgDraw(layerno int16, mav *LifeBarMatchValues) {
+	if mav.active {
 		ma.bg.Draw(float32(ma.pos[0])+sys.lifebarOffsetX, float32(ma.pos[1]), layerno, sys.lifebarScale)
 	}
 }
-func (ma *LifeBarMatch) draw(layerno int16, f []*Fnt) {
-	if ma.active && ma.text.font[0] >= 0 && int(ma.text.font[0]) < len(f) && f[ma.text.font[0]] != nil {
+func (ma *LifeBarMatch) draw(layerno int16, mav *LifeBarMatchValues, f []*Fnt) {
+	if mav.active && ma.text.font[0] >= 0 && int(ma.text.font[0]) < len(f) && f[ma.text.font[0]] != nil {
 		text := ma.text.text
 		text = strings.Replace(text, "%s", fmt.Sprintf("%v", sys.match), 1)
 		ma.text.lay.DrawText(float32(ma.pos[0])+sys.lifebarOffsetX, float32(ma.pos[1]), sys.lifebarScale, layerno,
@@ -3387,6 +3386,7 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "match":
 			if l.ma == nil {
+				lbv.ma = *newLifeBarMatchValues()
 				l.ma = readLifeBarMatch(is, l.sff, l.at, l.fnt[:])
 			}
 		case "ailevel":
@@ -3512,7 +3512,6 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lb, lbv, _ := loadLifebar(l.deffile)
 	lb.ti.framespercount = l.ti.framespercount
-	lb.ma.active = l.ma.active
 	lb.ai[0].active = l.ai[0].active
 	lb.ai[1].active = l.ai[1].active
 	lb.wc[0].active = l.wc[0].active
@@ -3530,6 +3529,7 @@ func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lbv.tr.active = oldLbv.tr.active
 	lbv.sc[0].active = oldLbv.sc[0].active
 	lbv.sc[1].active = oldLbv.sc[1].active
+	lbv.ma.active = oldLbv.ma.active
 
 	sys.lifebar = *lb
 	sys.gs.lb = *lbv
@@ -3866,8 +3866,8 @@ func (l *Lifebar) draw(layerno int16) {
 				l.sc[i].draw(layerno, &sys.gs.lb.sc[i], l.fnt[:], i)
 			}
 			//LifeBarMatch
-			l.ma.bgDraw(layerno)
-			l.ma.draw(layerno, l.fnt[:])
+			l.ma.bgDraw(layerno, &sys.gs.lb.ma)
+			l.ma.draw(layerno, &sys.gs.lb.ma, l.fnt[:])
 			//LifeBarAiLevel
 			for i := range l.ai {
 				l.ai[i].bgDraw(layerno)
