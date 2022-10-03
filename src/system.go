@@ -105,6 +105,7 @@ type GameState struct {
 	randseed                int32
 	time                    int32
 	gameTime                int32
+	lb                      LifebarValues
 	aiInput                 [MaxSimul*2 + MaxAttachedChar]AiInput
 	charArray               []Char
 	chars                   [MaxSimul*2 + MaxAttachedChar][]int
@@ -673,7 +674,9 @@ func (s *System) loaderReset() {
 }
 func (s *System) loadStart() {
 	// Reset game state
+	lbv := &s.gs.lb
 	s.gs = &GameState{}
+	s.gs.lb = *lbv
 
 	s.loaderReset()
 	s.loader.runTread()
@@ -894,7 +897,7 @@ func (s *System) playerClear(pn int, destroy bool) {
 }
 func (s *System) nextRound() {
 	s.resetGblEffect()
-	s.lifebar.reset()
+	s.lifebar.reset(&s.gs.lb)
 	s.finish = FT_NotYet
 	s.winTeam = -1
 	s.winType = [...]WinType{WT_N, WT_N}
@@ -910,11 +913,11 @@ func (s *System) nextRound() {
 	s.gs.time = s.roundTime
 	s.nextCharId = s.helperMax
 	if (s.tmode[0] == TM_Turns && s.wins[1] == s.numTurns[0]-1) ||
-		(s.tmode[0] != TM_Turns && s.wins[1] == s.lifebar.ro.match_wins[0]-1) {
+		(s.tmode[0] != TM_Turns && s.wins[1] == s.gs.lb.ro.match_wins[0]-1) {
 		s.roundType[0] = RT_Deciding
 	}
 	if (s.tmode[1] == TM_Turns && s.wins[0] == s.numTurns[1]-1) ||
-		(s.tmode[1] != TM_Turns && s.wins[0] == s.lifebar.ro.match_wins[1]-1) {
+		(s.tmode[1] != TM_Turns && s.wins[0] == s.gs.lb.ro.match_wins[1]-1) {
 		s.roundType[1] = RT_Deciding
 	}
 	if s.roundType[0] == RT_Deciding && s.roundType[1] == RT_Deciding {
@@ -1177,7 +1180,7 @@ func (s *System) action(x, y, scl *float32) {
 	} else {
 		s.charUpdate(&cvmin, &cvmax, &highest, &lowest, &leftest, &rightest)
 	}
-	s.lifebar.step()
+	s.lifebar.step(&s.gs.lb)
 
 	// Action camera
 	var newx, newy float32 = *x, *y
@@ -1190,7 +1193,7 @@ func (s *System) action(x, y, scl *float32) {
 	// Update camera
 	introSkip := false
 	if s.tickNextFrame() {
-		if s.lifebar.ro.cur < 1 && !s.introSkipped {
+		if s.gs.lb.ro.cur < 1 && !s.introSkipped {
 			if s.shuttertime > 0 ||
 				s.anyButton() && !s.sf(GSF_roundnotskip) && s.intro > s.lifebar.ro.ctrl_time {
 				s.shuttertime++
@@ -1277,7 +1280,7 @@ func (s *System) action(x, y, scl *float32) {
 	explUpdate(&s.gs.topexplDrawlist, false)
 	explUpdate(&s.gs.underexplDrawlist, true)
 
-	if s.lifebar.ro.act() {
+	if s.lifebar.ro.act(&s.gs.lb.ro) {
 		if s.intro > s.lifebar.ro.ctrl_time {
 			s.intro--
 			if s.sf(GSF_intro) && s.intro <= s.lifebar.ro.ctrl_time {
@@ -1421,8 +1424,8 @@ func (s *System) action(x, y, scl *float32) {
 				w := [...]bool{!s.getChar(1, 0).win(), !s.getChar(0, 0).win()}
 				if !w[0] || !w[1] ||
 					s.tmode[0] == TM_Turns || s.tmode[1] == TM_Turns ||
-					s.draws >= s.lifebar.ro.match_maxdrawgames[0] ||
-					s.draws >= s.lifebar.ro.match_maxdrawgames[1] {
+					s.draws >= s.gs.lb.ro.match_maxdrawgames[0] ||
+					s.draws >= s.gs.lb.ro.match_maxdrawgames[1] {
 					for i, win := range w {
 						if win {
 							s.wins[i]++
@@ -1462,13 +1465,13 @@ func (s *System) action(x, y, scl *float32) {
 						w := [...]bool{!s.getChar(1, 0).win(), !s.getChar(0, 0).win()}
 						if !w[0] || !w[1] ||
 							s.tmode[0] == TM_Turns || s.tmode[1] == TM_Turns ||
-							s.draws >= s.lifebar.ro.match_maxdrawgames[0] ||
-							s.draws >= s.lifebar.ro.match_maxdrawgames[1] {
+							s.draws >= s.gs.lb.ro.match_maxdrawgames[0] ||
+							s.draws >= s.gs.lb.ro.match_maxdrawgames[1] {
 							for i, win := range w {
 								if win {
-									s.lifebar.wi[i].add(s.winType[i])
+									s.lifebar.wi[i].add(s.winType[i], &s.gs.lb.wi[i])
 									if s.matchOver() && s.wins[i] >= s.matchWins[i] {
-										s.lifebar.wc[i].wins += 1
+										s.gs.lb.wc[i].wins += 1
 									}
 								}
 							}
@@ -1597,8 +1600,8 @@ func (s *System) draw(x, y, scl float32) {
 		//	rect[0] = s.scrrect[2] - rect[2]
 		//	fade(rect, 0, 255)
 		//}
-		s.lifebar.draw(-1)
-		s.lifebar.draw(0)
+		s.lifebar.draw(-1, &s.gs.lb)
+		s.lifebar.draw(0, &s.gs.lb)
 	} else {
 		FillRect(s.scrrect, ecol, 255)
 	}
@@ -1608,9 +1611,9 @@ func (s *System) draw(x, y, scl float32) {
 			s.stage.draw(true, bgx, bgy, scl)
 		}
 	}
-	s.lifebar.draw(1)
+	s.lifebar.draw(1, &s.gs.lb)
 	s.topSprites.draw(x, y, scl*s.gs.cam.BaseScale())
-	s.lifebar.draw(2)
+	s.lifebar.draw(2, &s.gs.lb)
 }
 func (s *System) drawTop() {
 	fade := func(rect [4]int32, color uint32, alpha int32) {
@@ -1621,7 +1624,7 @@ func (s *System) drawTop() {
 		for _, p := range s.getPlayers() {
 			if p != nil {
 				if len(p.dialogue) > 0 {
-					sys.lifebar.ro.cur = 3
+					sys.gs.lb.ro.cur = 3
 					sys.dialogueFlg = true
 					break
 				}
@@ -2075,7 +2078,7 @@ func (s *System) fight() (reload bool) {
 				}
 			}
 			s.matchData.RawSetInt(int(s.round-1), tbl_roundNo)
-			s.scoreRounds = append(s.scoreRounds, [2]float32{s.lifebar.sc[0].scorePoints, s.lifebar.sc[1].scorePoints})
+			s.scoreRounds = append(s.scoreRounds, [2]float32{s.gs.lb.sc[0].scorePoints, s.gs.lb.sc[1].scorePoints})
 			oldTeamLeader = s.teamLeader
 			
 			if !s.matchOver() && (s.tmode[0] != TM_Turns || s.getChar(0, 0).win()) &&
