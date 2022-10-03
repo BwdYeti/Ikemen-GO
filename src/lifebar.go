@@ -739,8 +739,6 @@ type StunBar struct {
 	value       LbText
 	front       map[float32]*AnimLayout
 	shift       AnimLayout
-	midpower    float32
-	midpowerMin float32
 }
 
 func newStunBar() (sb *StunBar) {
@@ -777,7 +775,7 @@ func readStunBar(pre string, is IniSection,
 	sb.warn = *ReadAnimLayout(pre+"warn.", is, sff, at, 0)
 	return sb
 }
-func (sb *StunBar) step(ref int, sbr *StunBar, snd *Snd) {
+func (sb *StunBar) step(ref int, sbv *StunBarValues, snd *Snd) {
 	if !sys.lifebar.stunbar {
 		return
 	}
@@ -785,14 +783,14 @@ func (sb *StunBar) step(ref int, sbr *StunBar, snd *Snd) {
 	power := 1 - float32(p.dizzyPoints)/float32(p.dizzyPointsMax)
 	sb.shift.anim.srcAlpha = int16(255 * power)
 	sb.shift.anim.dstAlpha = int16(255 * (1 - power))
-	sbr.midpower -= 1.0 / 144
-	if power < sbr.midpowerMin {
-		sbr.midpowerMin += (power - sbr.midpowerMin) * (1 / (12 - (power-sbr.midpowerMin)*144))
+	sbv.midpower -= 1.0 / 144
+	if power < sbv.midpowerMin {
+		sbv.midpowerMin += (power - sbv.midpowerMin) * (1 / (12 - (power-sbv.midpowerMin)*144))
 	} else {
-		sbr.midpowerMin = power
+		sbv.midpowerMin = power
 	}
-	if sbr.midpower < sbr.midpowerMin {
-		sbr.midpower = sbr.midpowerMin
+	if sbv.midpower < sbv.midpowerMin {
+		sbv.midpower = sbv.midpowerMin
 	}
 	sb.bg0.Action()
 	sb.bg1.Action()
@@ -831,7 +829,7 @@ func (sb *StunBar) bgDraw(layerno int16) {
 	sb.bg1.Draw(float32(sb.pos[0])+sys.lifebarOffsetX, float32(sb.pos[1]), layerno, sys.lifebarScale)
 	sb.bg2.Draw(float32(sb.pos[0])+sys.lifebarOffsetX, float32(sb.pos[1]), layerno, sys.lifebarScale)
 }
-func (sb *StunBar) draw(layerno int16, ref int, sbr *StunBar, f []*Fnt) {
+func (sb *StunBar) draw(layerno int16, ref int, sbv *StunBarValues, f []*Fnt) {
 	if !sys.lifebar.stunbar {
 		return
 	}
@@ -849,7 +847,7 @@ func (sb *StunBar) draw(layerno int16, ref int, sbr *StunBar, f []*Fnt) {
 		}
 		return
 	}
-	pr, mr := width(power), width(sbr.midpower)
+	pr, mr := width(power), width(sbv.midpower)
 	if sb.range_x[0] < sb.range_x[1] {
 		mr[0] += pr[2]
 	}
@@ -2898,6 +2896,9 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 		gb: [...][]GuardBarValues{make([]GuardBarValues, 2), make([]GuardBarValues, 8),
 			make([]GuardBarValues, 2), make([]GuardBarValues, 8), make([]GuardBarValues, 6),
 			make([]GuardBarValues, 8), make([]GuardBarValues, 6), make([]GuardBarValues, 8)},
+		sb: [...][]StunBarValues{make([]StunBarValues, 2), make([]StunBarValues, 8),
+			make([]StunBarValues, 2), make([]StunBarValues, 8), make([]StunBarValues, 6),
+			make([]StunBarValues, 8), make([]StunBarValues, 6), make([]StunBarValues, 8)},
 		fa: [...][]LifeBarFaceValues{make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8),
 			make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6),
 			make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6), make([]LifeBarFaceValues, 8)}}
@@ -3066,9 +3067,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "stunbar":
 			if l.sb[0][0] == nil {
+				lbv.sb[0][0] = *newStunBarValues()
 				l.sb[0][0] = readStunBar("p1.", is, l.sff, l.at, l.fnt[:])
 			}
 			if l.sb[0][1] == nil {
+				lbv.sb[0][1] = *newStunBarValues()
 				l.sb[0][1] = readStunBar("p2.", is, l.sff, l.at, l.fnt[:])
 			}
 		case "face":
@@ -3119,9 +3122,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 				}
 			case len(subname) >= 7 && subname[:7] == "stunbar":
 				if l.sb[2][0] == nil {
+					lbv.sb[2][0] = *newStunBarValues()
 					l.sb[2][0] = readStunBar("p1.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.sb[2][1] == nil {
+					lbv.sb[2][1] = *newStunBarValues()
 					l.sb[2][1] = readStunBar("p2.", is, l.sff, l.at, l.fnt[:])
 				}
 			case len(subname) >= 4 && subname[:4] == "face":
@@ -3264,28 +3269,36 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 				}
 			case len(subname) >= 7 && subname[:7] == "stunbar":
 				if l.sb[i][0] == nil {
+					lbv.sb[i][0] = *newStunBarValues()
 					l.sb[i][0] = readStunBar("p1.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.sb[i][1] == nil {
+					lbv.sb[i][1] = *newStunBarValues()
 					l.sb[i][1] = readStunBar("p2.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.sb[i][2] == nil {
+					lbv.sb[i][2] = *newStunBarValues()
 					l.sb[i][2] = readStunBar("p3.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.sb[i][3] == nil {
+					lbv.sb[i][3] = *newStunBarValues()
 					l.sb[i][3] = readStunBar("p4.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.sb[i][4] == nil {
+					lbv.sb[i][4] = *newStunBarValues()
 					l.sb[i][4] = readStunBar("p5.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.sb[i][5] == nil {
+					lbv.sb[i][5] = *newStunBarValues()
 					l.sb[i][5] = readStunBar("p6.", is, l.sff, l.at, l.fnt[:])
 				}
 				if i != 4 && i != 6 {
 					if l.sb[i][6] == nil {
+						lbv.sb[i][6] = *newStunBarValues()
 						l.sb[i][6] = readStunBar("p7.", is, l.sff, l.at, l.fnt[:])
 					}
 					if l.sb[i][7] == nil {
+						lbv.sb[i][7] = *newStunBarValues()
 						l.sb[i][7] = readStunBar("p8.", is, l.sff, l.at, l.fnt[:])
 					}
 				}
@@ -3607,7 +3620,7 @@ func (l *Lifebar) step() {
 			//GuardBar
 			l.gb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.gb[l.ref[ti]][v], l.snd)
 			//StunBar
-			l.sb[l.ref[ti]][i*2+ti].step(v, l.sb[l.ref[ti]][v], l.snd)
+			l.sb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.sb[l.ref[ti]][v], l.snd)
 			//LifeBarFace
 			l.fa[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.fa[l.ref[ti]][v])
 			//LifeBarName
@@ -3845,7 +3858,7 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			for ti := range sys.tmode {
 				for i, v := range l.order[ti] {
-					l.sb[l.ref[ti]][i*2+ti].draw(layerno, v, l.sb[l.ref[ti]][v], l.fnt[:])
+					l.sb[l.ref[ti]][i*2+ti].draw(layerno, v, &sys.gs.lb.sb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//LifeBarFace
