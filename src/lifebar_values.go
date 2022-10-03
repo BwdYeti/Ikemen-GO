@@ -13,6 +13,29 @@ func newHealthBarValues() *HealthBarValues {
 	return &HealthBarValues{oldlife: 1, midlife: 1, midlifeMin: 1}
 }
 
+type LifeBarWinIconValues struct {
+	wins          []WinType
+	numWins       int
+	added, addedP Animation
+}
+
+func newLifeBarWinIconValues() *LifeBarWinIconValues {
+	return &LifeBarWinIconValues{added: Animation{nilAnim: true},
+		addedP: Animation{nilAnim: true}}
+}
+
+func (wiv *LifeBarWinIconValues) clone() (result *LifeBarWinIconValues) {
+	result = &LifeBarWinIconValues{}
+	*result = *wiv
+
+	// Manually copy references that shallow copy poorly, as needed
+	// Pointers, slices, maps, functions, channels etc
+	result.wins = make([]WinType, len(wiv.wins))
+	copy(result.wins, wiv.wins)
+
+	return
+}
+
 type LifeBarComboValues struct {
 	cur, old   int32
 	curd, oldd int32
@@ -110,6 +133,7 @@ func newLifeBarWinCountValues() *LifeBarWinCountValues {
 
 type LifebarValues struct {
 	hb [8][]HealthBarValues
+	wi [2]LifeBarWinIconValues
 	co [2]LifeBarComboValues
 	ac [2]LifeBarActionValues
 	ro LifeBarRoundValues
@@ -129,6 +153,10 @@ func (lbv *LifebarValues) clone() (result *LifebarValues) {
 	for i := range lbv.hb {
 		result.hb[i] = make([]HealthBarValues, len(lbv.hb[i]))
 		copy(result.hb[i], lbv.hb[i])
+	}
+
+	for i := range lbv.wi {
+		result.wi[i] = *lbv.wi[i].clone()
 	}
 
 	for i := range lbv.ac {

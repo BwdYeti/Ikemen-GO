@@ -835,7 +835,7 @@ func systemScriptInit(l *lua.LState) {
 
 			// Reset lifebars
 			for i := range sys.lifebar.wi {
-				sys.lifebar.wi[i].clear()
+				sys.lifebar.wi[i].clear(&sys.gs.lb.wi[i])
 			}
 
 			sys.draws = 0

@@ -1120,9 +1120,6 @@ type LifeBarWinIcon struct {
 	bg0           AnimLayout
 	top           AnimLayout
 	icon          [WT_NumTypes]AnimLayout
-	wins          []WinType
-	numWins       int
-	added, addedP *Animation
 }
 
 func newLifeBarWinIcon() *LifeBarWinIcon {
@@ -1148,46 +1145,44 @@ func readLifeBarWinIcon(pre string, is IniSection,
 	wi.icon[WT_Perfect] = *ReadAnimLayout(pre+"perfect.", is, sff, at, 0)
 	return wi
 }
-func (wi *LifeBarWinIcon) add(wt WinType) {
-	wi.wins = append(wi.wins, wt)
+func (wi *LifeBarWinIcon) add(wt WinType, wiv *LifeBarWinIconValues) {
+	wiv.wins = append(wiv.wins, wt)
 	if wt >= WT_PN {
-		wi.addedP = &Animation{}
-		*wi.addedP = wi.icon[WT_Perfect].anim
-		wi.addedP.Reset()
+		wiv.addedP = wi.icon[WT_Perfect].anim
+		wiv.addedP.Reset()
 		wt -= WT_PN
 	}
-	wi.added = &Animation{}
-	*wi.added = wi.icon[wt].anim
-	wi.added.Reset()
+	wiv.added = wi.icon[wt].anim
+	wiv.added.Reset()
 }
-func (wi *LifeBarWinIcon) step(numwin int32) {
+func (wi *LifeBarWinIcon) step(numwin int32, wiv *LifeBarWinIconValues) {
 	wi.bg0.Action()
 	wi.top.Action()
-	if int(numwin) < len(wi.wins) {
-		wi.wins = wi.wins[:numwin]
-		wi.reset()
+	if int(numwin) < len(wiv.wins) {
+		wiv.wins = wiv.wins[:numwin]
+		wi.reset(wiv)
 	}
 	for i := range wi.icon {
 		wi.icon[i].Action()
 	}
-	if wi.added != nil {
-		wi.added.Action()
+	if !wiv.added.nilAnim {
+		wiv.added.Action()
 	}
-	if wi.addedP != nil {
-		wi.addedP.Action()
+	if !wiv.addedP.nilAnim {
+		wiv.addedP.Action()
 	}
 }
-func (wi *LifeBarWinIcon) reset() {
+func (wi *LifeBarWinIcon) reset(wiv *LifeBarWinIconValues) {
 	wi.bg0.Reset()
 	wi.top.Reset()
 	for i := range wi.icon {
 		wi.icon[i].Reset()
 	}
-	wi.numWins = len(wi.wins)
-	wi.added, wi.addedP = nil, nil
+	wiv.numWins = len(wiv.wins)
+	wiv.added, wiv.addedP = Animation{nilAnim: true}, Animation{nilAnim: true}
 }
-func (wi *LifeBarWinIcon) clear() { wi.wins = nil }
-func (wi *LifeBarWinIcon) draw(layerno int16, f []*Fnt, side int) {
+func (wi *LifeBarWinIcon) clear(wiv *LifeBarWinIconValues) { wiv.wins = nil }
+func (wi *LifeBarWinIcon) draw(layerno int16, wiv *LifeBarWinIconValues, f []*Fnt, side int) {
 	bg0num := float64(sys.gs.lb.ro.match_wins[^side&1])
 	if sys.tmode[^side&1] == TM_Turns {
 		bg0num = float64(sys.numTurns[^side&1])
@@ -1196,16 +1191,16 @@ func (wi *LifeBarWinIcon) draw(layerno int16, f []*Fnt, side int) {
 		wi.bg0.Draw(float32(wi.pos[0]+wi.iconoffset[0]*int32(i))+sys.lifebarOffsetX,
 			float32(wi.pos[1]+wi.iconoffset[1]*int32(i)), layerno, sys.lifebarScale)
 	}
-	if len(wi.wins) > int(wi.useiconupto) {
+	if len(wiv.wins) > int(wi.useiconupto) {
 		if wi.counter.font[0] >= 0 && int(wi.counter.font[0]) < len(f) && f[wi.counter.font[0]] != nil {
 			wi.counter.lay.DrawText(float32(wi.pos[0])+sys.lifebarOffsetX, float32(wi.pos[1]), sys.lifebarScale,
-				layerno, strings.Replace(wi.counter.text, "%i", fmt.Sprintf("%v", len(wi.wins)), 1),
+				layerno, strings.Replace(wi.counter.text, "%i", fmt.Sprintf("%v", len(wiv.wins)), 1),
 				f[wi.counter.font[0]], wi.counter.font[1], wi.counter.font[2], wi.counter.palfx, wi.counter.frgba)
 		}
 	} else {
 		i := 0
-		for ; i < wi.numWins; i++ {
-			wt, p := wi.wins[i], false
+		for ; i < wiv.numWins; i++ {
+			wt, p := wiv.wins[i], false
 			if wt >= WT_PN {
 				wt -= WT_PN
 				p = true
@@ -1217,19 +1212,19 @@ func (wi *LifeBarWinIcon) draw(layerno int16, f []*Fnt, side int) {
 					float32(wi.pos[1]+wi.iconoffset[1]*int32(i)), layerno, sys.lifebarScale)
 			}
 		}
-		if wi.added != nil {
-			wt, p := wi.wins[i], false
-			if wi.addedP != nil {
+		if !wiv.added.nilAnim {
+			wt, p := wiv.wins[i], false
+			if !wiv.addedP.nilAnim {
 				wt -= WT_PN
 				p = true
 			}
 			wi.icon[wt].lay.DrawAnim(&wi.icon[wt].lay.window,
 				float32(wi.pos[0]+wi.iconoffset[0]*int32(i))+sys.lifebarOffsetX,
-				float32(wi.pos[1]+wi.iconoffset[1]*int32(i)), sys.lifebarScale, layerno, wi.added, nil)
+				float32(wi.pos[1]+wi.iconoffset[1]*int32(i)), sys.lifebarScale, layerno, &wiv.added, nil)
 			if p {
 				wi.icon[WT_Perfect].lay.DrawAnim(&wi.icon[WT_Perfect].lay.window,
 					float32(wi.pos[0]+wi.iconoffset[0]*int32(i))+sys.lifebarOffsetX,
-					float32(wi.pos[1]+wi.iconoffset[1]*int32(i)), sys.lifebarScale, layerno, wi.addedP, nil)
+					float32(wi.pos[1]+wi.iconoffset[1]*int32(i)), sys.lifebarScale, layerno, &wiv.addedP, nil)
 			}
 		}
 	}
@@ -3320,9 +3315,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "winicon":
 			if l.wi[0] == nil {
+				lbv.wi[0] = *newLifeBarWinIconValues()
 				l.wi[0] = readLifeBarWinIcon("p1.", is, l.sff, l.at, l.fnt[:])
 			}
 			if l.wi[1] == nil {
+				lbv.wi[1] = *newLifeBarWinIconValues()
 				l.wi[1] = readLifeBarWinIcon("p2.", is, l.sff, l.at, l.fnt[:])
 			}
 		case "time":
@@ -3580,7 +3577,7 @@ func (l *Lifebar) step() {
 	}
 	//LifeBarWinIcon
 	for i := range l.wi {
-		l.wi[i].step(sys.wins[i])
+		l.wi[i].step(sys.wins[i], &sys.gs.lb.wi[i])
 	}
 	//LifeBarTime
 	l.ti.step()
@@ -3717,7 +3714,7 @@ func (l *Lifebar) reset() {
 		}
 	}
 	for i := range l.wi {
-		l.wi[i].reset()
+		l.wi[i].reset(&sys.gs.lb.wi[i])
 	}
 	l.ti.reset()
 	for i := range l.co {
@@ -3839,7 +3836,7 @@ func (l *Lifebar) draw(layerno int16) {
 			l.ti.draw(layerno, l.fnt[:])
 			//LifeBarWinIcon
 			for i := range l.wi {
-				l.wi[i].draw(layerno, l.fnt[:], i)
+				l.wi[i].draw(layerno, &sys.gs.lb.wi[i], l.fnt[:], i)
 			}
 			//LifeBarRatio
 			for ti, tm := range sys.tmode {

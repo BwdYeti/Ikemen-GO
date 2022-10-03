@@ -1469,7 +1469,7 @@ func (s *System) action(x, y, scl *float32) {
 							s.draws >= s.gs.lb.ro.match_maxdrawgames[1] {
 							for i, win := range w {
 								if win {
-									s.lifebar.wi[i].add(s.winType[i])
+									s.lifebar.wi[i].add(s.winType[i], &s.gs.lb.wi[i])
 									if s.matchOver() && s.wins[i] >= s.matchWins[i] {
 										s.gs.lb.wc[i].wins += 1
 									}
