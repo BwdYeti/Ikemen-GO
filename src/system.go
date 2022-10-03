@@ -1471,7 +1471,7 @@ func (s *System) action(x, y, scl *float32) {
 								if win {
 									s.lifebar.wi[i].add(s.winType[i])
 									if s.matchOver() && s.wins[i] >= s.matchWins[i] {
-										s.lifebar.wc[i].wins += 1
+										s.gs.lb.wc[i].wins += 1
 									}
 								}
 							}

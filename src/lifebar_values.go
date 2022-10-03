@@ -99,6 +99,15 @@ func newLifeBarAiLevelValues() *LifeBarAiLevelValues {
 	return &LifeBarAiLevelValues{}
 }
 
+type LifeBarWinCountValues struct {
+	wins   int32
+	active bool
+}
+
+func newLifeBarWinCountValues() *LifeBarWinCountValues {
+	return &LifeBarWinCountValues{}
+}
+
 type LifebarValues struct {
 	hb [8][]HealthBarValues
 	co [2]LifeBarComboValues
@@ -108,6 +117,7 @@ type LifebarValues struct {
 	sc [2]LifeBarScoreValues
 	ma LifeBarMatchValues
 	ai [2]LifeBarAiLevelValues
+	wc [2]LifeBarWinCountValues
 }
 
 func (lbv *LifebarValues) clone() (result *LifebarValues) {

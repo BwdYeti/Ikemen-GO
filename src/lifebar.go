@@ -2762,9 +2762,7 @@ type LifeBarWinCount struct {
 	text    LbText
 	bg      AnimLayout
 	top     AnimLayout
-	wins    int32
 	enabled map[string]bool
-	active  bool
 }
 
 func newLifeBarWinCount() *LifeBarWinCount {
@@ -2796,15 +2794,15 @@ func (wc *LifeBarWinCount) reset() {
 	wc.bg.Reset()
 	wc.top.Reset()
 }
-func (wc *LifeBarWinCount) bgDraw(layerno int16) {
-	if wc.active {
+func (wc *LifeBarWinCount) bgDraw(layerno int16, wcv *LifeBarWinCountValues) {
+	if wcv.active {
 		wc.bg.Draw(float32(wc.pos[0])+sys.lifebarOffsetX, float32(wc.pos[1]), layerno, sys.lifebarScale)
 	}
 }
-func (wc *LifeBarWinCount) draw(layerno int16, f []*Fnt, side int) {
-	if wc.active && wc.text.font[0] >= 0 && int(wc.text.font[0]) < len(f) && f[wc.text.font[0]] != nil {
+func (wc *LifeBarWinCount) draw(layerno int16, wcv *LifeBarWinCountValues, f []*Fnt, side int) {
+	if wcv.active && wc.text.font[0] >= 0 && int(wc.text.font[0]) < len(f) && f[wc.text.font[0]] != nil {
 		text := wc.text.text
-		text = strings.Replace(text, "%s", fmt.Sprintf("%v", wc.wins), 1)
+		text = strings.Replace(text, "%s", fmt.Sprintf("%v", wcv.wins), 1)
 		wc.text.lay.DrawText(float32(wc.pos[0])+sys.lifebarOffsetX, float32(wc.pos[1]), sys.lifebarScale, layerno,
 			text, f[wc.text.font[0]], wc.text.font[1], wc.text.font[2], wc.text.palfx, wc.text.frgba)
 		wc.top.Draw(float32(wc.pos[0])+sys.lifebarOffsetX, float32(wc.pos[1]), layerno, sys.lifebarScale)
@@ -3399,9 +3397,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "wincount":
 			if l.wc[0] == nil {
+				lbv.wc[0] = *newLifeBarWinCountValues()
 				l.wc[0] = readLifeBarWinCount("p1.", is, l.sff, l.at, l.fnt[:])
 			}
 			if l.wc[1] == nil {
+				lbv.wc[1] = *newLifeBarWinCountValues()
 				l.wc[1] = readLifeBarWinCount("p2.", is, l.sff, l.at, l.fnt[:])
 			}
 		case "mode":
@@ -3513,8 +3513,6 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lb, lbv, _ := loadLifebar(l.deffile)
 	lb.ti.framespercount = l.ti.framespercount
-	lb.wc[0].active = l.wc[0].active
-	lb.wc[1].active = l.wc[1].active
 	lb.active = l.active
 	lb.bars = l.bars
 	lb.mode = l.mode
@@ -3531,6 +3529,8 @@ func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lbv.ma.active = oldLbv.ma.active
 	lbv.ai[0].active = oldLbv.ai[0].active
 	lbv.ai[1].active = oldLbv.ai[1].active
+	lbv.wc[0].active = oldLbv.wc[0].active
+	lbv.wc[1].active = oldLbv.wc[1].active
 
 	sys.lifebar = *lb
 	sys.gs.lb = *lbv
@@ -3878,10 +3878,10 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			//LifeBarWinCount
 			for i := range l.wc {
-				l.wc[i].bgDraw(layerno)
+				l.wc[i].bgDraw(layerno, &sys.gs.lb.wc[i])
 			}
 			for i := range l.wc {
-				l.wc[i].draw(layerno, l.fnt[:], i)
+				l.wc[i].draw(layerno, &sys.gs.lb.wc[i], l.fnt[:], i)
 			}
 		}
 		//LifeBarCombo

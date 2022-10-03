@@ -1985,9 +1985,11 @@ func systemScriptInit(l *lua.LState) {
 				scv.active = v.enabled[sys.gameMode]
 			}
 		}
-		for _, v := range sys.lifebar.wc {
+		for i := range sys.lifebar.wc {
+			v := sys.lifebar.wc[i]
+			wcv := sys.gs.lb.wc[i]
 			if _, ok := v.enabled[sys.gameMode]; ok {
-				v.active = v.enabled[sys.gameMode]
+				wcv.active = v.enabled[sys.gameMode]
 			}
 		}
 		if _, ok := sys.lifebar.tr.enabled[sys.gameMode]; ok {
@@ -2015,13 +2017,13 @@ func systemScriptInit(l *lua.LState) {
 				case "p1score":
 					sys.gs.lb.sc[0].active = lua.LVAsBool(value)
 				case "p1winCount":
-					sys.lifebar.wc[0].active = lua.LVAsBool(value)
+					sys.gs.lb.wc[0].active = lua.LVAsBool(value)
 				case "p2aiLevel":
 					sys.gs.lb.ai[1].active = lua.LVAsBool(value)
 				case "p2score":
 					sys.gs.lb.sc[1].active = lua.LVAsBool(value)
 				case "p2winCount":
-					sys.lifebar.wc[1].active = lua.LVAsBool(value)
+					sys.gs.lb.wc[1].active = lua.LVAsBool(value)
 				case "redlifebar": //enabled depending on config.json
 					sys.lifebar.redlifebar = lua.LVAsBool(value)
 				case "stunbar": //enabled depending on config.json
@@ -2241,7 +2243,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		sys.lifebar.wc[tn-1].wins = int32(numArg(l, 2))
+		sys.gs.lb.wc[tn-1].wins = int32(numArg(l, 2))
 		return 0
 	})
 	luaRegister(l, "setZoom", func(l *lua.LState) int {
