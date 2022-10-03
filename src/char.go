@@ -4321,7 +4321,7 @@ func (c *Char) dizzyPointsAdd(add float64, absolute bool) {
 	}
 }
 func (c *Char) dizzyPointsSet(set int32) {
-	if !sys.roundEnd() && sys.lifebar.stunbar {
+	if !sys.roundEnd() && sys.gs.lb.stunbar {
 		c.dizzyPoints = Clamp(set, 0, c.dizzyPointsMax)
 	}
 }
@@ -4334,7 +4334,7 @@ func (c *Char) guardPointsAdd(add float64, absolute bool) {
 	}
 }
 func (c *Char) guardPointsSet(set int32) {
-	if !sys.roundEnd() && sys.lifebar.guardbar {
+	if !sys.roundEnd() && sys.gs.lb.guardbar {
 		c.guardPoints = Clamp(set, 0, c.guardPointsMax)
 	}
 }
@@ -4349,7 +4349,7 @@ func (c *Char) redLifeAdd(add float64, absolute bool) {
 func (c *Char) redLifeSet(set int32) {
 	if c.life == 0 {
 		c.redLife = 0
-	} else if !sys.roundEnd() && sys.lifebar.redlifebar {
+	} else if !sys.roundEnd() && sys.gs.lb.redlifebar {
 		c.redLife = Clamp(set, 0, c.lifeMax-c.life)
 	}
 }

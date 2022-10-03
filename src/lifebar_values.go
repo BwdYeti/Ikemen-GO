@@ -171,20 +171,28 @@ func newLifeBarWinCountValues() *LifeBarWinCountValues {
 }
 
 type LifebarValues struct {
-	hb [8][]HealthBarValues
-	pb [8][]PowerBarValues
-	gb [8][]GuardBarValues
-	sb [8][]StunBarValues
-	fa [8][]LifeBarFaceValues
-	wi [2]LifeBarWinIconValues
-	co [2]LifeBarComboValues
-	ac [2]LifeBarActionValues
-	ro LifeBarRoundValues
-	tr LifeBarTimerValues
-	sc [2]LifeBarScoreValues
-	ma LifeBarMatchValues
-	ai [2]LifeBarAiLevelValues
-	wc [2]LifeBarWinCountValues
+	order      [2][]int
+	hb         [8][]HealthBarValues
+	pb         [8][]PowerBarValues
+	gb         [8][]GuardBarValues
+	sb         [8][]StunBarValues
+	fa         [8][]LifeBarFaceValues
+	wi         [2]LifeBarWinIconValues
+	co         [2]LifeBarComboValues
+	ac         [2]LifeBarActionValues
+	ro         LifeBarRoundValues
+	tr         LifeBarTimerValues
+	sc         [2]LifeBarScoreValues
+	ma         LifeBarMatchValues
+	ai         [2]LifeBarAiLevelValues
+	wc         [2]LifeBarWinCountValues
+	active     bool
+	bars       bool
+	mode       bool
+	redlifebar bool
+	guardbar   bool
+	stunbar    bool
+	hidebars   bool
 }
 
 func (lbv *LifebarValues) clone() (result *LifebarValues) {

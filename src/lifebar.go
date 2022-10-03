@@ -332,7 +332,7 @@ func (hb *HealthBar) draw(layerno int16, ref int, hbv *HealthBarValues, f []*Fnt
 	mr[2] -= Min(mr[2], lr[2])
 	//rr[2] -= Min(rr[2], lr[2])
 	var rv int32
-	if sys.lifebar.redlifebar {
+	if sys.gs.lb.redlifebar {
 		for k := range hb.red {
 			if k > rv && redval >= k {
 				rv = k
@@ -626,7 +626,7 @@ func readGuardBar(pre string, is IniSection,
 	return gb
 }
 func (gb *GuardBar) step(ref int, gbv *GuardBarValues, snd *Snd) {
-	if !sys.lifebar.guardbar {
+	if !sys.gs.lb.guardbar {
 		return
 	}
 	p := sys.getChar(ref, 0)
@@ -672,7 +672,7 @@ func (gb *GuardBar) reset() {
 	gb.warn.Reset()
 }
 func (gb *GuardBar) bgDraw(layerno int16) {
-	if !sys.lifebar.guardbar {
+	if !sys.gs.lb.guardbar {
 		return
 	}
 	gb.bg0.Draw(float32(gb.pos[0])+sys.lifebarOffsetX, float32(gb.pos[1]), layerno, sys.lifebarScale)
@@ -680,7 +680,7 @@ func (gb *GuardBar) bgDraw(layerno int16) {
 	gb.bg2.Draw(float32(gb.pos[0])+sys.lifebarOffsetX, float32(gb.pos[1]), layerno, sys.lifebarScale)
 }
 func (gb *GuardBar) draw(layerno int16, ref int, gbv *GuardBarValues, f []*Fnt) {
-	if !sys.lifebar.guardbar {
+	if !sys.gs.lb.guardbar {
 		return
 	}
 	p := sys.getChar(ref, 0)
@@ -776,7 +776,7 @@ func readStunBar(pre string, is IniSection,
 	return sb
 }
 func (sb *StunBar) step(ref int, sbv *StunBarValues, snd *Snd) {
-	if !sys.lifebar.stunbar {
+	if !sys.gs.lb.stunbar {
 		return
 	}
 	p := sys.getChar(ref, 0)
@@ -822,7 +822,7 @@ func (sb *StunBar) reset() {
 	sb.warn.Reset()
 }
 func (sb *StunBar) bgDraw(layerno int16) {
-	if !sys.lifebar.stunbar {
+	if !sys.gs.lb.stunbar {
 		return
 	}
 	sb.bg0.Draw(float32(sb.pos[0])+sys.lifebarOffsetX, float32(sb.pos[1]), layerno, sys.lifebarScale)
@@ -830,7 +830,7 @@ func (sb *StunBar) bgDraw(layerno int16) {
 	sb.bg2.Draw(float32(sb.pos[0])+sys.lifebarOffsetX, float32(sb.pos[1]), layerno, sys.lifebarScale)
 }
 func (sb *StunBar) draw(layerno int16, ref int, sbv *StunBarValues, f []*Fnt) {
-	if !sys.lifebar.stunbar {
+	if !sys.gs.lb.stunbar {
 		return
 	}
 	p := sys.getChar(ref, 0)
@@ -2829,12 +2829,12 @@ func (mo *LifeBarMode) reset() {
 	mo.top.Reset()
 }
 func (mo *LifeBarMode) bgDraw(layerno int16) {
-	if sys.lifebar.mode {
+	if sys.gs.lb.mode {
 		mo.bg.Draw(float32(mo.pos[0])+sys.lifebarOffsetX, float32(mo.pos[1]), layerno, sys.lifebarScale)
 	}
 }
 func (mo *LifeBarMode) draw(layerno int16, f []*Fnt) {
-	if sys.lifebar.mode && mo.text.font[0] >= 0 && int(mo.text.font[0]) < len(f) && f[mo.text.font[0]] != nil {
+	if sys.gs.lb.mode && mo.text.font[0] >= 0 && int(mo.text.font[0]) < len(f) && f[mo.text.font[0]] != nil {
 		mo.text.lay.DrawText(float32(mo.pos[0])+sys.lifebarOffsetX, float32(mo.pos[1]), sys.lifebarScale, layerno,
 			mo.text.text, f[mo.text.font[0]], mo.text.font[1], mo.text.font[2], mo.text.palfx, mo.text.frgba)
 		mo.top.Draw(float32(mo.pos[0])+sys.lifebarOffsetX, float32(mo.pos[1]), layerno, sys.lifebarScale)
@@ -2847,7 +2847,6 @@ type Lifebar struct {
 	snd, fsnd  *Snd
 	fnt        [10]*Fnt
 	ref        [2]int
-	order      [2][]int
 	hb         [8][]*HealthBar
 	pb         [8][]*PowerBar
 	gb         [8][]*GuardBar
@@ -2867,13 +2866,6 @@ type Lifebar struct {
 	wc         [2]*LifeBarWinCount
 	mo         map[string]*LifeBarMode
 	missing    map[string]int
-	active     bool
-	bars       bool
-	mode       bool
-	redlifebar bool
-	guardbar   bool
-	stunbar    bool
-	hidebars   bool
 	fx_scale   float32
 	fnt_scale  float32
 	deffile    string
@@ -2901,7 +2893,8 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			make([]StunBarValues, 8), make([]StunBarValues, 6), make([]StunBarValues, 8)},
 		fa: [...][]LifeBarFaceValues{make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8),
 			make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6),
-			make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6), make([]LifeBarFaceValues, 8)}}
+			make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6), make([]LifeBarFaceValues, 8)},
+		active: true, bars: true, mode: true}
 
 	l := &Lifebar{sff: &Sff{}, fsff: &Sff{}, snd: &Snd{},
 		hb: [...][]*HealthBar{make([]*HealthBar, 2), make([]*HealthBar, 8),
@@ -2922,7 +2915,7 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 		nm: [...][]*LifeBarName{make([]*LifeBarName, 2), make([]*LifeBarName, 8),
 			make([]*LifeBarName, 2), make([]*LifeBarName, 8), make([]*LifeBarName, 6),
 			make([]*LifeBarName, 8), make([]*LifeBarName, 6), make([]*LifeBarName, 8)},
-		active: true, bars: true, mode: true, fx_scale: 1, fnt_scale: 1}
+		fx_scale: 1, fnt_scale: 1}
 	l.missing = map[string]int{
 		"[tag lifebar]": 3, "[simul_3p lifebar]": 4, "[simul_4p lifebar]": 5,
 		"[tag_3p lifebar]": 6, "[tag_4p lifebar]": 7, "[simul powerbar]": 1,
@@ -3562,12 +3555,6 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lb, lbv, _ := loadLifebar(l.deffile)
 	lb.ti.framespercount = l.ti.framespercount
-	lb.active = l.active
-	lb.bars = l.bars
-	lb.mode = l.mode
-	lb.redlifebar = l.redlifebar
-	lb.guardbar = l.guardbar
-	lb.stunbar = l.stunbar
 	lb.fx_scale = l.fx_scale
 
 	lbv.ro.match_maxdrawgames = oldLbv.ro.match_maxdrawgames
@@ -3580,6 +3567,12 @@ func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lbv.ai[1].active = oldLbv.ai[1].active
 	lbv.wc[0].active = oldLbv.wc[0].active
 	lbv.wc[1].active = oldLbv.wc[1].active
+	lbv.active = oldLbv.active
+	lbv.bars = oldLbv.bars
+	lbv.mode = oldLbv.mode
+	lbv.redlifebar = oldLbv.redlifebar
+	lbv.guardbar = oldLbv.guardbar
+	lbv.stunbar = oldLbv.stunbar
 
 	sys.lifebar = *lb
 	sys.gs.lb = *lbv
@@ -3590,20 +3583,20 @@ func (l *Lifebar) step(lbv *LifebarValues) {
 	}
 	for ti, tm := range sys.tmode {
 		if tm == TM_Tag {
-			for i, v := range l.order[ti] {
+			for i, v := range lbv.order[ti] {
 				p := sys.getChar(v, 0)
 				if sys.teamLeader[p.teamside] == p.playerNo && p.alive() {
 					if i != 0 {
-						if i == len(l.order[ti])-1 {
-							l.order[ti] = sliceMoveInt(l.order[ti], i, 0)
+						if i == len(lbv.order[ti])-1 {
+							lbv.order[ti] = sliceMoveInt(lbv.order[ti], i, 0)
 						} else {
-							last := len(l.order[ti]) - 1
+							last := len(lbv.order[ti]) - 1
 							for n := last; n > 0; n-- {
-								if !sys.getChar(l.order[ti][n], 0).alive() {
+								if !sys.getChar(lbv.order[ti][n], 0).alive() {
 									last -= 1
 								}
 							}
-							l.order[ti] = sliceMoveInt(l.order[ti], 0, last)
+							lbv.order[ti] = sliceMoveInt(lbv.order[ti], 0, last)
 						}
 					}
 					break
@@ -3612,7 +3605,7 @@ func (l *Lifebar) step(lbv *LifebarValues) {
 		}
 	}
 	for ti := range sys.tmode {
-		for i, v := range l.order[ti] {
+		for i, v := range lbv.order[ti] {
 			//HealthBar
 			l.hb[l.ref[ti]][i*2+ti].step(v, &lbv.hb[l.ref[ti]][v])
 			//PowerBar
@@ -3658,7 +3651,7 @@ func (l *Lifebar) step(lbv *LifebarValues) {
 	}
 	//LifeBarAction
 	for i := range l.ac {
-		l.ac[i].step(l.order[i][0], &lbv.ac[i])
+		l.ac[i].step(lbv.order[i][0], &lbv.ac[i])
 	}
 	//LifeBarRatio
 	for ti, tm := range sys.tmode {
@@ -3730,9 +3723,9 @@ func (l *Lifebar) reset(lbv *LifebarValues) {
 		} else {
 			num[ti] = len(l.hb[l.ref[ti]])
 		}
-		l.order[ti] = []int{}
+		lbv.order[ti] = []int{}
 		for i := ti; i < num[ti]; i += 2 {
-			l.order[ti] = append(l.order[ti], i)
+			lbv.order[ti] = append(lbv.order[ti], i)
 		}
 	}
 	for _, hb := range l.hb {
@@ -3773,7 +3766,7 @@ func (l *Lifebar) reset(lbv *LifebarValues) {
 		l.co[i].reset(&lbv.co[i])
 	}
 	for i := range l.ac {
-		l.ac[i].reset(l.order[i][0], &lbv.ac[i])
+		l.ac[i].reset(lbv.order[i][0], &lbv.ac[i])
 	}
 	l.ro.reset(&lbv.ro)
 	for i := range l.ra {
@@ -3799,22 +3792,22 @@ func (l *Lifebar) draw(layerno int16, lbv *LifebarValues) {
 	if sys.postMatchFlg || sys.dialogueBarsFlg {
 		return
 	}
-	if sys.statusDraw && l.active {
-		if !sys.sf(GSF_nobardisplay) && l.bars {
+	if sys.statusDraw && lbv.active {
+		if !sys.sf(GSF_nobardisplay) && lbv.bars {
 			//HealthBar
 			for ti := range sys.tmode {
-				for i := range l.order[ti] {
+				for i := range lbv.order[ti] {
 					l.hb[l.ref[ti]][i*2+ti].bgDraw(layerno)
 				}
 			}
 			for ti := range sys.tmode {
-				for i, v := range l.order[ti] {
+				for i, v := range lbv.order[ti] {
 					l.hb[l.ref[ti]][i*2+ti].draw(layerno, v, &lbv.hb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//PowerBar
 			for ti, tm := range sys.tmode {
-				for i := range l.order[ti] {
+				for i := range lbv.order[ti] {
 					if !sys.getChar(i*2+ti, 0).sf(CSF_nopowerbardisplay) {
 						if sys.powerShare[ti] && (tm == TM_Simul || tm == TM_Tag) {
 							if i == 0 {
@@ -3827,7 +3820,7 @@ func (l *Lifebar) draw(layerno int16, lbv *LifebarValues) {
 				}
 			}
 			for ti, tm := range sys.tmode {
-				for i, v := range l.order[ti] {
+				for i, v := range lbv.order[ti] {
 					if !sys.getChar(i*2+ti, 0).sf(CSF_nopowerbardisplay) {
 						if sys.powerShare[ti] && (tm == TM_Simul || tm == TM_Tag) {
 							if i == 0 {
@@ -3841,45 +3834,45 @@ func (l *Lifebar) draw(layerno int16, lbv *LifebarValues) {
 			}
 			//GuardBar
 			for ti := range sys.tmode {
-				for i := range l.order[ti] {
+				for i := range lbv.order[ti] {
 					l.gb[l.ref[ti]][i*2+ti].bgDraw(layerno)
 				}
 			}
 			for ti := range sys.tmode {
-				for i, v := range l.order[ti] {
+				for i, v := range lbv.order[ti] {
 					l.gb[l.ref[ti]][i*2+ti].draw(layerno, v, &lbv.gb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//StunBar
 			for ti := range sys.tmode {
-				for i := range l.order[ti] {
+				for i := range lbv.order[ti] {
 					l.sb[l.ref[ti]][i*2+ti].bgDraw(layerno)
 				}
 			}
 			for ti := range sys.tmode {
-				for i, v := range l.order[ti] {
+				for i, v := range lbv.order[ti] {
 					l.sb[l.ref[ti]][i*2+ti].draw(layerno, v, &lbv.sb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//LifeBarFace
 			for ti := range sys.tmode {
-				for i := range l.order[ti] {
+				for i := range lbv.order[ti] {
 					l.fa[l.ref[ti]][i*2+ti].bgDraw(layerno)
 				}
 			}
 			for ti := range sys.tmode {
-				for i, v := range l.order[ti] {
+				for i, v := range lbv.order[ti] {
 					l.fa[l.ref[ti]][i*2+ti].draw(layerno, v, l.fa[l.ref[ti]][v], &lbv.fa[l.ref[ti]][v])
 				}
 			}
 			//LifeBarName
 			for ti := range sys.tmode {
-				for i := range l.order[ti] {
+				for i := range lbv.order[ti] {
 					l.nm[l.ref[ti]][i*2+ti].bgDraw(layerno)
 				}
 			}
 			for ti := range sys.tmode {
-				for i, v := range l.order[ti] {
+				for i, v := range lbv.order[ti] {
 					l.nm[l.ref[ti]][i*2+ti].draw(layerno, v, l.fnt[:], ti)
 				}
 			}
@@ -3947,7 +3940,7 @@ func (l *Lifebar) draw(layerno int16, lbv *LifebarValues) {
 			l.mo[sys.gameMode].draw(layerno, l.fnt[:])
 		}
 	}
-	if l.active {
+	if lbv.active {
 		//LifeBarRound
 		l.ro.draw(layerno, &lbv.ro, l.fnt[:])
 	}

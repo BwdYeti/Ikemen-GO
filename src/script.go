@@ -2001,17 +2001,17 @@ func systemScriptInit(l *lua.LState) {
 			case lua.LString:
 				switch string(k) {
 				case "active": //enabled by default
-					sys.lifebar.active = lua.LVAsBool(value)
+					sys.gs.lb.active = lua.LVAsBool(value)
 				case "bars": //enabled by default
-					sys.lifebar.bars = lua.LVAsBool(value)
+					sys.gs.lb.bars = lua.LVAsBool(value)
 				case "guardbar": //enabled depending on config.json
-					sys.lifebar.guardbar = lua.LVAsBool(value)
+					sys.gs.lb.guardbar = lua.LVAsBool(value)
 				case "hidebars": //enabled depending on dialogue system.def settings
-					sys.lifebar.hidebars = lua.LVAsBool(value)
+					sys.gs.lb.hidebars = lua.LVAsBool(value)
 				case "match":
 					sys.gs.lb.ma.active = lua.LVAsBool(value)
 				case "mode": //enabled by default
-					sys.lifebar.mode = lua.LVAsBool(value)
+					sys.gs.lb.mode = lua.LVAsBool(value)
 				case "p1aiLevel":
 					sys.gs.lb.ai[0].active = lua.LVAsBool(value)
 				case "p1score":
@@ -2025,9 +2025,9 @@ func systemScriptInit(l *lua.LState) {
 				case "p2winCount":
 					sys.gs.lb.wc[1].active = lua.LVAsBool(value)
 				case "redlifebar": //enabled depending on config.json
-					sys.lifebar.redlifebar = lua.LVAsBool(value)
+					sys.gs.lb.redlifebar = lua.LVAsBool(value)
 				case "stunbar": //enabled depending on config.json
-					sys.lifebar.stunbar = lua.LVAsBool(value)
+					sys.gs.lb.stunbar = lua.LVAsBool(value)
 				case "timer":
 					sys.gs.lb.tr.active = lua.LVAsBool(value)
 				default:
