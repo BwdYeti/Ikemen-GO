@@ -2551,9 +2551,7 @@ type LifeBarScore struct {
 	places      int32
 	min         float32
 	max         float32
-	scorePoints float32
 	enabled     map[string]bool
-	active      bool
 }
 
 func newLifeBarScore() *LifeBarScore {
@@ -2587,18 +2585,18 @@ func (sc *LifeBarScore) step() {
 	sc.bg.Action()
 	sc.top.Action()
 }
-func (sc *LifeBarScore) reset() {
+func (sc *LifeBarScore) reset(scv *LifeBarScoreValues) {
 	sc.bg.Reset()
 	sc.top.Reset()
-	sc.scorePoints = 0
+	scv.scorePoints = 0
 }
-func (sc *LifeBarScore) bgDraw(layerno int16) {
-	if sc.active {
+func (sc *LifeBarScore) bgDraw(layerno int16, scv *LifeBarScoreValues) {
+	if scv.active {
 		sc.bg.Draw(float32(sc.pos[0])+sys.lifebarOffsetX, float32(sc.pos[1]), layerno, sys.lifebarScale)
 	}
 }
-func (sc *LifeBarScore) draw(layerno int16, f []*Fnt, side int) {
-	if sc.active && sc.text.font[0] >= 0 && int(sc.text.font[0]) < len(f) && f[sc.text.font[0]] != nil {
+func (sc *LifeBarScore) draw(layerno int16, scv *LifeBarScoreValues, f []*Fnt, side int) {
+	if scv.active && sc.text.font[0] >= 0 && int(sc.text.font[0]) < len(f) && f[sc.text.font[0]] != nil {
 		text := sc.text.text
 		total := sys.getChar(side, 0).scoreTotal()
 		if total == 0 && sc.pad == 0 {
@@ -3380,9 +3378,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "score":
 			if l.sc[0] == nil {
+				lbv.sc[0] = *newLifeBarScoreValues()
 				l.sc[0] = readLifeBarScore("p1.", is, l.sff, l.at, l.fnt[:])
 			}
 			if l.sc[1] == nil {
+				lbv.sc[1] = *newLifeBarScoreValues()
 				l.sc[1] = readLifeBarScore("p2.", is, l.sff, l.at, l.fnt[:])
 			}
 		case "match":
@@ -3512,8 +3512,6 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lb, lbv, _ := loadLifebar(l.deffile)
 	lb.ti.framespercount = l.ti.framespercount
-	lb.sc[0].active = l.sc[0].active
-	lb.sc[1].active = l.sc[1].active
 	lb.ma.active = l.ma.active
 	lb.ai[0].active = l.ai[0].active
 	lb.ai[1].active = l.ai[1].active
@@ -3530,6 +3528,8 @@ func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lbv.ro.match_maxdrawgames = oldLbv.ro.match_maxdrawgames
 	lbv.ro.match_wins = oldLbv.ro.match_wins
 	lbv.tr.active = oldLbv.tr.active
+	lbv.sc[0].active = oldLbv.sc[0].active
+	lbv.sc[1].active = oldLbv.sc[1].active
 
 	sys.lifebar = *lb
 	sys.gs.lb = *lbv
@@ -3731,7 +3731,7 @@ func (l *Lifebar) reset() {
 	}
 	l.tr.reset()
 	for i := range l.sc {
-		l.sc[i].reset()
+		l.sc[i].reset(&sys.gs.lb.sc[i])
 	}
 	l.ma.reset()
 	for i := range l.ai {
@@ -3860,10 +3860,10 @@ func (l *Lifebar) draw(layerno int16) {
 			l.tr.draw(layerno, &sys.gs.lb.tr, l.fnt[:])
 			//LifeBarScore
 			for i := range l.sc {
-				l.sc[i].bgDraw(layerno)
+				l.sc[i].bgDraw(layerno, &sys.gs.lb.sc[i])
 			}
 			for i := range l.sc {
-				l.sc[i].draw(layerno, l.fnt[:], i)
+				l.sc[i].draw(layerno, &sys.gs.lb.sc[i], l.fnt[:], i)
 			}
 			//LifeBarMatch
 			l.ma.bgDraw(layerno)

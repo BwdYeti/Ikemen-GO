@@ -1687,7 +1687,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		sys.lifebar.sc[tn-1].scorePoints = 0
+		sys.gs.lb.sc[tn-1].scorePoints = 0
 		return 0
 	})
 	luaRegister(l, "roundReset", func(*lua.LState) int {
@@ -1976,9 +1976,11 @@ func systemScriptInit(l *lua.LState) {
 				v.active = v.enabled[sys.gameMode]
 			}
 		}
-		for _, v := range sys.lifebar.sc {
+		for i := range sys.lifebar.sc {
+			v := sys.lifebar.sc[i]
+			scv := sys.gs.lb.sc[i]
 			if _, ok := v.enabled[sys.gameMode]; ok {
-				v.active = v.enabled[sys.gameMode]
+				scv.active = v.enabled[sys.gameMode]
 			}
 		}
 		for _, v := range sys.lifebar.wc {
@@ -2009,13 +2011,13 @@ func systemScriptInit(l *lua.LState) {
 				case "p1aiLevel":
 					sys.lifebar.ai[0].active = lua.LVAsBool(value)
 				case "p1score":
-					sys.lifebar.sc[0].active = lua.LVAsBool(value)
+					sys.gs.lb.sc[0].active = lua.LVAsBool(value)
 				case "p1winCount":
 					sys.lifebar.wc[0].active = lua.LVAsBool(value)
 				case "p2aiLevel":
 					sys.lifebar.ai[1].active = lua.LVAsBool(value)
 				case "p2score":
-					sys.lifebar.sc[1].active = lua.LVAsBool(value)
+					sys.gs.lb.sc[1].active = lua.LVAsBool(value)
 				case "p2winCount":
 					sys.lifebar.wc[1].active = lua.LVAsBool(value)
 				case "redlifebar": //enabled depending on config.json

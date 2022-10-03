@@ -2078,7 +2078,7 @@ func (s *System) fight() (reload bool) {
 				}
 			}
 			s.matchData.RawSetInt(int(s.round-1), tbl_roundNo)
-			s.scoreRounds = append(s.scoreRounds, [2]float32{s.lifebar.sc[0].scorePoints, s.lifebar.sc[1].scorePoints})
+			s.scoreRounds = append(s.scoreRounds, [2]float32{s.gs.lb.sc[0].scorePoints, s.gs.lb.sc[1].scorePoints})
 			oldTeamLeader = s.teamLeader
 			
 			if !s.matchOver() && (s.tmode[0] != TM_Turns || s.getChar(0, 0).win()) &&

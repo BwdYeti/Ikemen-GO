@@ -4357,13 +4357,13 @@ func (c *Char) score() float32 {
 	if c.teamside == -1 {
 		return 0
 	}
-	return sys.lifebar.sc[c.teamside].scorePoints
+	return sys.gs.lb.sc[c.teamside].scorePoints
 }
 func (c *Char) scoreAdd(val float32) {
 	if c.teamside == -1 {
 		return
 	}
-	sys.lifebar.sc[c.teamside].scorePoints += val
+	sys.gs.lb.sc[c.teamside].scorePoints += val
 }
 func (c *Char) scoreTotal() float32 {
 	if c.teamside == -1 {
