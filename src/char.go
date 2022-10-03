@@ -2760,7 +2760,7 @@ func (c *Char) comboCount() int32 {
 	if c.teamside == -1 {
 		return 0
 	}
-	return sys.lifebar.co[c.teamside].combo
+	return sys.gs.lb.co[c.teamside].combo
 }
 func (c *Char) command(pn, i int) bool {
 	if !c.keyctrl[0] || c.cmd == nil {
@@ -3063,7 +3063,7 @@ func (c *Char) roundState() int32 {
 		return -1
 	case sys.intro > sys.lifebar.ro.ctrl_time+1:
 		return 0
-	case sys.lifebar.ro.cur == 0:
+	case sys.gs.lb.ro.cur == 0:
 		return 1
 	case sys.intro >= 0 || sys.finish == FT_NotYet:
 		return 2
@@ -3751,8 +3751,8 @@ func (c *Char) hitAdd(h int32) {
 				t.receivedHits += h
 				t.fakeReceivedHits += h
 				if c.teamside != -1 {
-					sys.lifebar.co[c.teamside].combo += h
-					sys.lifebar.co[c.teamside].fakeCombo += h
+					sys.gs.lb.co[c.teamside].combo += h
+					sys.gs.lb.co[c.teamside].fakeCombo += h
 				}
 			}
 		}
@@ -3762,11 +3762,11 @@ func (c *Char) hitAdd(h int32) {
 			if p != nil && c.teamside == ^i&1 {
 				if p.receivedHits != 0 || p.ss.moveType == MT_H {
 					p.receivedHits += h
-					sys.lifebar.co[c.teamside].combo += h
+					sys.gs.lb.co[c.teamside].combo += h
 				}
 				if p.fakeReceivedHits != 0 || p.ss.moveType == MT_H {
 					p.fakeReceivedHits += h
-					sys.lifebar.co[c.teamside].fakeCombo += h
+					sys.gs.lb.co[c.teamside].fakeCombo += h
 				}
 			}
 		}
@@ -4379,7 +4379,7 @@ func (c *Char) dizzyPointsAdd(add float64, absolute bool) {
 	}
 }
 func (c *Char) dizzyPointsSet(set int32) {
-	if !sys.roundEnd() && sys.lifebar.stunbar {
+	if !sys.roundEnd() && sys.gs.lb.stunbar {
 		c.dizzyPoints = Clamp(set, 0, c.dizzyPointsMax)
 	}
 }
@@ -4392,7 +4392,7 @@ func (c *Char) guardPointsAdd(add float64, absolute bool) {
 	}
 }
 func (c *Char) guardPointsSet(set int32) {
-	if !sys.roundEnd() && sys.lifebar.guardbar {
+	if !sys.roundEnd() && sys.gs.lb.guardbar {
 		c.guardPoints = Clamp(set, 0, c.guardPointsMax)
 	}
 }
@@ -4407,7 +4407,7 @@ func (c *Char) redLifeAdd(add float64, absolute bool) {
 func (c *Char) redLifeSet(set int32) {
 	if c.life == 0 {
 		c.redLife = 0
-	} else if !sys.roundEnd() && sys.lifebar.redlifebar {
+	} else if !sys.roundEnd() && sys.gs.lb.redlifebar {
 		c.redLife = Clamp(set, 0, c.lifeMax-c.life)
 	}
 }
@@ -4415,13 +4415,13 @@ func (c *Char) score() float32 {
 	if c.teamside == -1 {
 		return 0
 	}
-	return sys.lifebar.sc[c.teamside].scorePoints
+	return sys.gs.lb.sc[c.teamside].scorePoints
 }
 func (c *Char) scoreAdd(val float32) {
 	if c.teamside == -1 {
 		return
 	}
-	sys.lifebar.sc[c.teamside].scorePoints += val
+	sys.gs.lb.sc[c.teamside].scorePoints += val
 }
 func (c *Char) scoreTotal() float32 {
 	if c.teamside == -1 {
@@ -4912,9 +4912,9 @@ func (c *Char) appendLifebarAction(text string, snd, spr [2]int32, anim, time in
 	}
 	index := 0
 	if !top {
-		for k, v := range sys.lifebar.ac[c.teamside].messages {
+		for k, v := range sys.gs.lb.ac[c.teamside].messages {
 			if v.del {
-				sys.lifebar.ac[c.teamside].messages = removeLbMsg(sys.lifebar.ac[c.teamside].messages, k)
+				sys.gs.lb.ac[c.teamside].messages = removeLbMsg(sys.gs.lb.ac[c.teamside].messages, k)
 				break
 			}
 			index++
@@ -4935,7 +4935,7 @@ func (c *Char) appendLifebarAction(text string, snd, spr [2]int32, anim, time in
 		msg.bg = *ReadAnimLayout(fmt.Sprintf("team%v.bg.", c.teamside+1), sys.lifebar.ac[c.teamside].is, sys.lifebar.sff, sys.lifebar.at, 2)
 		msg.front = *ReadAnimLayout(fmt.Sprintf("team%v.front.", c.teamside+1), sys.lifebar.ac[c.teamside].is, sys.lifebar.sff, sys.lifebar.at, 2)
 	}
-	sys.lifebar.ac[c.teamside].messages = insertLbMsg(sys.lifebar.ac[c.teamside].messages, msg, index)
+	sys.gs.lb.ac[c.teamside].messages = insertLbMsg(sys.gs.lb.ac[c.teamside].messages, msg, index)
 }
 
 func (c *Char) appendDialogue(s string, reset bool) {
@@ -6656,7 +6656,7 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 				if getter.ss.moveType == MT_A {
 					c.counterHit = true
 				}
-				if !sys.lifebar.ro.firstAttack[0] && !sys.lifebar.ro.firstAttack[1] &&
+				if !sys.gs.lb.ro.firstAttack[0] && !sys.gs.lb.ro.firstAttack[1] &&
 					ghvset && getter.hoIdx < 0 && c.teamside != -1 {
 					ts := c.teamside
 					pn := c.playerNo
@@ -6664,7 +6664,7 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 						ts = getter.teamside
 						pn = getter.playerNo
 					}
-					sys.lifebar.ro.firstAttack[ts] = true
+					sys.gs.lb.ro.firstAttack[ts] = true
 					sys.getChar(pn, 0).firstAttack = true
 				}
 				if !math.IsNaN(float64(hd.score[0])) {
@@ -6802,8 +6802,8 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 			getter.receivedHits += hd.numhits * hits
 			getter.fakeReceivedHits += hd.numhits * hits
 			if c.teamside != -1 {
-				sys.lifebar.co[c.teamside].combo += hd.numhits * hits
-				sys.lifebar.co[c.teamside].fakeCombo += hd.numhits * hits
+				sys.gs.lb.co[c.teamside].combo += hd.numhits * hits
+				sys.gs.lb.co[c.teamside].fakeCombo += hd.numhits * hits
 			}
 			//getter.getcombodmg += hd.hitdamage
 			if hitType > 0 && !proj && getter.sf(CSF_screenbound) &&

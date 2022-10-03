@@ -835,7 +835,7 @@ func systemScriptInit(l *lua.LState) {
 
 			// Reset lifebars
 			for i := range sys.lifebar.wi {
-				sys.lifebar.wi[i].clear()
+				sys.lifebar.wi[i].clear(&sys.gs.lb.wi[i])
 			}
 
 			sys.draws = 0
@@ -918,12 +918,12 @@ func systemScriptInit(l *lua.LState) {
 					if sys.tmode[1] == TM_Turns {
 						sys.matchWins[0] = sys.numTurns[1]
 					} else {
-						sys.matchWins[0] = sys.lifebar.ro.match_wins[1]
+						sys.matchWins[0] = sys.gs.lb.ro.match_wins[1]
 					}
 					if sys.tmode[0] == TM_Turns {
 						sys.matchWins[1] = sys.numTurns[0]
 					} else {
-						sys.matchWins[1] = sys.lifebar.ro.match_wins[0]
+						sys.matchWins[1] = sys.gs.lb.ro.match_wins[0]
 					}
 					sys.teamLeader = [...]int{0, 1}
 					sys.stage.reset()
@@ -947,7 +947,7 @@ func systemScriptInit(l *lua.LState) {
 						sys.stage = nil
 					}
 					if sys.reloadLifebarFlg {
-						sys.lifebar.reloadLifebar()
+						sys.lifebar.reloadLifebar(&sys.gs.lb)
 					}
 					sys.loaderReset()
 					winp = -2
@@ -1399,7 +1399,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		l.Push(lua.LNumber(sys.lifebar.ro.match_maxdrawgames[tn-1]))
+		l.Push(lua.LNumber(sys.gs.lb.ro.match_maxdrawgames[tn-1]))
 		return 1
 	})
 	luaRegister(l, "getMatchWins", func(l *lua.LState) int {
@@ -1407,7 +1407,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		l.Push(lua.LNumber(sys.lifebar.ro.match_wins[tn-1]))
+		l.Push(lua.LNumber(sys.gs.lb.ro.match_wins[tn-1]))
 		return 1
 	})
 	luaRegister(l, "getRoundTime", func(l *lua.LState) int {
@@ -1474,11 +1474,12 @@ func systemScriptInit(l *lua.LState) {
 		return 1
 	})
 	luaRegister(l, "loadLifebar", func(l *lua.LState) int {
-		lb, err := loadLifebar(strArg(l, 1))
+		lb, lbv, err := loadLifebar(strArg(l, 1))
 		if err != nil {
 			l.RaiseError("\nCan't load %v: %v\n", strArg(l, 1), err.Error())
 		}
 		sys.lifebar = *lb
+		sys.gs.lb = *lbv
 		return 0
 	})
 	luaRegister(l, "loadStart", func(l *lua.LState) int {
@@ -1686,7 +1687,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		sys.lifebar.sc[tn-1].scorePoints = 0
+		sys.gs.lb.sc[tn-1].scorePoints = 0
 		return 0
 	})
 	luaRegister(l, "roundReset", func(*lua.LState) int {
@@ -1976,25 +1977,31 @@ func systemScriptInit(l *lua.LState) {
 	luaRegister(l, "setLifebarElements", func(*lua.LState) int {
 		// elements enabled via fight.def, depending on game mode
 		if _, ok := sys.lifebar.ma.enabled[sys.gameMode]; ok {
-			sys.lifebar.ma.active = sys.lifebar.ma.enabled[sys.gameMode]
+			sys.gs.lb.ma.active = sys.lifebar.ma.enabled[sys.gameMode]
 		}
-		for _, v := range sys.lifebar.ai {
+		for i := range sys.lifebar.ai {
+			v := sys.lifebar.ai[i]
+			aiv := sys.gs.lb.ai[i]
 			if _, ok := v.enabled[sys.gameMode]; ok {
-				v.active = v.enabled[sys.gameMode]
+				aiv.active = v.enabled[sys.gameMode]
 			}
 		}
-		for _, v := range sys.lifebar.sc {
+		for i := range sys.lifebar.sc {
+			v := sys.lifebar.sc[i]
+			scv := sys.gs.lb.sc[i]
 			if _, ok := v.enabled[sys.gameMode]; ok {
-				v.active = v.enabled[sys.gameMode]
+				scv.active = v.enabled[sys.gameMode]
 			}
 		}
-		for _, v := range sys.lifebar.wc {
+		for i := range sys.lifebar.wc {
+			v := sys.lifebar.wc[i]
+			wcv := sys.gs.lb.wc[i]
 			if _, ok := v.enabled[sys.gameMode]; ok {
-				v.active = v.enabled[sys.gameMode]
+				wcv.active = v.enabled[sys.gameMode]
 			}
 		}
 		if _, ok := sys.lifebar.tr.enabled[sys.gameMode]; ok {
-			sys.lifebar.tr.active = sys.lifebar.tr.enabled[sys.gameMode]
+			sys.gs.lb.tr.active = sys.lifebar.tr.enabled[sys.gameMode]
 		}
 		// elements forced by lua scripts
 		tableArg(l, 1).ForEach(func(key, value lua.LValue) {
@@ -2002,35 +2009,35 @@ func systemScriptInit(l *lua.LState) {
 			case lua.LString:
 				switch string(k) {
 				case "active": //enabled by default
-					sys.lifebar.active = lua.LVAsBool(value)
+					sys.gs.lb.active = lua.LVAsBool(value)
 				case "bars": //enabled by default
-					sys.lifebar.bars = lua.LVAsBool(value)
+					sys.gs.lb.bars = lua.LVAsBool(value)
 				case "guardbar": //enabled depending on config.json
-					sys.lifebar.guardbar = lua.LVAsBool(value)
+					sys.gs.lb.guardbar = lua.LVAsBool(value)
 				case "hidebars": //enabled depending on dialogue system.def settings
-					sys.lifebar.hidebars = lua.LVAsBool(value)
+					sys.gs.lb.hidebars = lua.LVAsBool(value)
 				case "match":
-					sys.lifebar.ma.active = lua.LVAsBool(value)
+					sys.gs.lb.ma.active = lua.LVAsBool(value)
 				case "mode": //enabled by default
-					sys.lifebar.mode = lua.LVAsBool(value)
+					sys.gs.lb.mode = lua.LVAsBool(value)
 				case "p1aiLevel":
-					sys.lifebar.ai[0].active = lua.LVAsBool(value)
+					sys.gs.lb.ai[0].active = lua.LVAsBool(value)
 				case "p1score":
-					sys.lifebar.sc[0].active = lua.LVAsBool(value)
+					sys.gs.lb.sc[0].active = lua.LVAsBool(value)
 				case "p1winCount":
-					sys.lifebar.wc[0].active = lua.LVAsBool(value)
+					sys.gs.lb.wc[0].active = lua.LVAsBool(value)
 				case "p2aiLevel":
-					sys.lifebar.ai[1].active = lua.LVAsBool(value)
+					sys.gs.lb.ai[1].active = lua.LVAsBool(value)
 				case "p2score":
-					sys.lifebar.sc[1].active = lua.LVAsBool(value)
+					sys.gs.lb.sc[1].active = lua.LVAsBool(value)
 				case "p2winCount":
-					sys.lifebar.wc[1].active = lua.LVAsBool(value)
+					sys.gs.lb.wc[1].active = lua.LVAsBool(value)
 				case "redlifebar": //enabled depending on config.json
-					sys.lifebar.redlifebar = lua.LVAsBool(value)
+					sys.gs.lb.redlifebar = lua.LVAsBool(value)
 				case "stunbar": //enabled depending on config.json
-					sys.lifebar.stunbar = lua.LVAsBool(value)
+					sys.gs.lb.stunbar = lua.LVAsBool(value)
 				case "timer":
-					sys.lifebar.tr.active = lua.LVAsBool(value)
+					sys.gs.lb.tr.active = lua.LVAsBool(value)
 				default:
 					l.RaiseError("\nInvalid table key: %v\n", k)
 				}
@@ -2106,7 +2113,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		sys.lifebar.ro.match_maxdrawgames[tn-1] = int32(numArg(l, 2))
+		sys.gs.lb.ro.match_maxdrawgames[tn-1] = int32(numArg(l, 2))
 		return 0
 	})
 	luaRegister(l, "setMatchNo", func(l *lua.LState) int {
@@ -2118,7 +2125,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		sys.lifebar.ro.match_wins[tn-1] = int32(numArg(l, 2))
+		sys.gs.lb.ro.match_wins[tn-1] = int32(numArg(l, 2))
 		return 0
 	})
 	luaRegister(l, "setMaxAfterImage", func(l *lua.LState) int {
@@ -2244,7 +2251,7 @@ func systemScriptInit(l *lua.LState) {
 		if tn < 1 || tn > 2 {
 			l.RaiseError("\nInvalid team side: %v\n", tn)
 		}
-		sys.lifebar.wc[tn-1].wins = int32(numArg(l, 2))
+		sys.gs.lb.wc[tn-1].wins = int32(numArg(l, 2))
 		return 0
 	})
 	luaRegister(l, "setZoom", func(l *lua.LState) int {
