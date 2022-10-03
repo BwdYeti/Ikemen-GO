@@ -37,7 +37,7 @@ var (
 // The only instance of a System struct.
 // Do not create more than 1.
 var sys = System{
-	gs:                GameState{randseed:int32(time.Now().UnixNano()), cam: *newCamera()},
+	gs:                NewGameState(),
 	scrrect:           [...]int32{0, 0, 320, 240},
 	gameWidth:         320,
 	gameHeight:        240,
@@ -114,6 +114,11 @@ type GameState struct {
 	topexplDrawlist         [MaxSimul*2 + MaxAttachedChar][]int
 	underexplDrawlist       [MaxSimul*2 + MaxAttachedChar][]int
 	cam                     Camera
+	ac                      activeCamera
+}
+
+func NewGameState() *GameState {
+	return &GameState{randseed:int32(time.Now().UnixNano()), cam: *newCamera()}
 }
 
 func (gs *GameState) clone() (result *GameState) {
@@ -278,7 +283,7 @@ type System struct {
 	loader                  Loader
 
 	// Game State
-	gs                      GameState
+	gs                      *GameState
 	savedGs                 *GameState
 	saveStateFlag           bool
 	loadStateFlag           bool
@@ -712,7 +717,7 @@ func (s *System) loaderReset() {
 }
 func (s *System) loadStart() {
 	// Reset game state
-	s.gs = GameState{}
+	s.gs = &GameState{}
 
 	s.loaderReset()
 	s.loader.runTread()
@@ -2028,7 +2033,7 @@ func (s *System) fight() (reload bool) {
 
 	oldWins, oldDraws := s.wins, s.draws
 	oldTeamLeader := s.teamLeader
-	var x, y, scl float32
+	s.gs.ac = activeCamera{}
 	// Anonymous function to reset values, called at the start of each round
 	reset := func() {
 		s.wins, s.draws = oldWins, oldDraws
@@ -2063,9 +2068,8 @@ func (s *System) fight() (reload bool) {
 		s.nextRound()
 		s.roundResetFlg, s.introSkipped = false, false
 		s.reloadFlg, s.reloadStageFlg, s.reloadLifebarFlg = false, false, false
-		x, y = 0, 0
-		scl = s.gs.cam.startzoom
-		s.gs.cam.Update(scl, x, y)
+		s.gs.ac.reset(&s.gs.cam)
+		s.gs.cam.Update(s.gs.ac.scl, s.gs.ac.x, s.gs.ac.y)
 	}
 	reset()
 
@@ -2087,7 +2091,7 @@ func (s *System) fight() (reload bool) {
 
 		} else if s.loadStateFlag {
 			if (s.savedGs != nil) {
-				s.gs = *s.savedGs.clone()
+				s.gs = s.savedGs.clone()
 			}
 		}
 		s.saveStateFlag = false;
@@ -2190,7 +2194,7 @@ func (s *System) fight() (reload bool) {
 		}
 
 		// Update game state
-		s.action(&x, &y, &scl)
+		s.TickGameState(s.gs)
 
 		// F4 pressed to restart round
 		if s.roundResetFlg && !s.postMatchFlg {
@@ -2210,21 +2214,21 @@ func (s *System) fight() (reload bool) {
 		}
 		// Render frame
 		if !s.frameSkip {
-			dx, dy, dscl := x, y, scl
+			dac := s.gs.ac
 			if s.enableZoomstate {
 				if !s.debugPaused() {
 					s.zoomPosXLag += ((s.zoomPos[0] - s.zoomPosXLag) * (1 - s.zoomlag))
 					s.zoomPosYLag += ((s.zoomPos[1] - s.zoomPosYLag) * (1 - s.zoomlag))
-					s.drawScale = s.drawScale / (s.drawScale + (s.zoomScale*scl-s.drawScale)*s.zoomlag) * s.zoomScale * scl
+					s.drawScale = s.drawScale / (s.drawScale + (s.zoomScale*s.gs.ac.scl-s.drawScale)*s.zoomlag) * s.zoomScale * s.gs.ac.scl
 				}
 				if s.zoomCameraBound {
-					dscl = MaxF(s.gs.cam.MinScale, s.drawScale/s.gs.cam.BaseScale())
-					dx = s.gs.cam.XBound(dscl, x+s.zoomPosXLag/scl)
+					dac.scl = MaxF(s.gs.cam.MinScale, s.drawScale/s.gs.cam.BaseScale())
+					dac.x = s.gs.cam.XBound(dac.scl, s.gs.ac.x+s.zoomPosXLag/s.gs.ac.scl)
 				} else {
-					dscl = s.drawScale / s.gs.cam.BaseScale()
-					dx = x + s.zoomPosXLag/scl
+					dac.scl = s.drawScale / s.gs.cam.BaseScale()
+					dac.x = s.gs.ac.x + s.zoomPosXLag/s.gs.ac.scl
 				}
-				dy = y + s.zoomPosYLag
+				dac.y = s.gs.ac.y + s.zoomPosYLag
 			} else {
 				s.zoomlag = 0
 				s.zoomPosXLag = 0
@@ -2233,7 +2237,7 @@ func (s *System) fight() (reload bool) {
 				s.zoomPos = [2]float32{0, 0}
 				s.drawScale = s.gs.cam.Scale
 			}
-			s.draw(dx, dy, dscl)
+			s.draw(dac.x, dac.y, dac.scl)
 		}
 		//Lua code executed before drawing fade, clsns and debug
 		for _, str := range s.commonLua {
@@ -2266,6 +2270,19 @@ func (s *System) fight() (reload bool) {
 	}
 
 	return false
+}
+
+func (s *System) TickGameState(gs *GameState) {
+	// Store singleton game state
+	storedGs := s.gs
+	// Set singleton game state to the passed game state
+	s.gs = gs
+
+	// Tick game state
+	s.action(&s.gs.ac.x, &s.gs.ac.y, &s.gs.ac.scl)
+
+	// Restore game state
+	s.gs = storedGs
 }
 
 type wincntMap map[string][]int32

@@ -47,6 +47,18 @@ type PalFX struct {
 	eColor     float32
 }
 
+func (pf *PalFX) clone() (result *PalFX) {
+	result = &PalFX{}
+	*result = *pf
+
+	// Manually copy references that shallow copy poorly, as needed
+	// Pointers, slices, maps, functions, channels etc
+	result.remap = make([]int, len(pf.remap))
+	copy(result.remap, pf.remap)
+
+	return
+}
+
 func newPalFX() *PalFX { return &PalFX{} }
 func (pf *PalFX) clear2(nt bool) {
 	pf.PalFXDef = PalFXDef{color: 1, mul: [...]int32{256, 256, 256}}
