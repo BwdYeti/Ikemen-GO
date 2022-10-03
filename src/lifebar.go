@@ -213,7 +213,7 @@ func readHealthBar(pre string, is IniSection,
 	hb.warn = *ReadAnimLayout(pre+"warn.", is, sff, at, 0)
 	return hb
 }
-func (hb *HealthBar) step(ref int, hbr *HealthBar, hbv *HealthBarValues) {
+func (hb *HealthBar) step(ref int, hbv *HealthBarValues) {
 	p := sys.getChar(ref, 0)
 	var life float32 = float32(p.life) / float32(p.lifeMax)
 	//redlife := (float32(p.life) + float32(p.redLife)) / float32(p.lifeMax)
@@ -304,7 +304,7 @@ func (hb *HealthBar) bgDraw(layerno int16) {
 	hb.bg1.Draw(float32(hb.pos[0])+sys.lifebarOffsetX, float32(hb.pos[1]), layerno, sys.lifebarScale)
 	hb.bg2.Draw(float32(hb.pos[0])+sys.lifebarOffsetX, float32(hb.pos[1]), layerno, sys.lifebarScale)
 }
-func (hb *HealthBar) draw(layerno int16, ref int, hbr *HealthBar, hbv *HealthBarValues, f []*Fnt) {
+func (hb *HealthBar) draw(layerno int16, ref int, hbv *HealthBarValues, f []*Fnt) {
 	p := sys.getChar(ref, 0)
 	life := float32(p.life) / float32(p.lifeMax)
 	redlife := (float32(p.life) + float32(p.redLife)) / float32(p.lifeMax)
@@ -384,9 +384,6 @@ type PowerBar struct {
 	value            LbText
 	value_rounding   int32
 	level_snd        [9][2]int32
-	midpower         float32
-	midpowerMin      float32
-	prevLevel        int32
 	levelbars        bool
 }
 
@@ -447,7 +444,7 @@ func readPowerBar(pre string, is IniSection,
 	is.ReadBool(pre+"levelbars", &pb.levelbars)
 	return pb
 }
-func (pb *PowerBar) step(ref int, pbr *PowerBar, snd *Snd) {
+func (pb *PowerBar) step(ref int, pbv *PowerBarValues, snd *Snd) {
 	p := sys.getChar(ref, 0)
 	pbval := p.getPower()
 	power := float32(pbval) / float32(p.powerMax)
@@ -457,20 +454,20 @@ func (pb *PowerBar) step(ref int, pbr *PowerBar, snd *Snd) {
 	}
 	pb.shift.anim.srcAlpha = int16(255 * (1 - power))
 	pb.shift.anim.dstAlpha = int16(255 * power)
-	pbr.midpower -= 1.0 / 144
-	if power < pbr.midpowerMin {
-		pbr.midpowerMin += (power - pbr.midpowerMin) * (1 / (12 - (power-pbr.midpowerMin)*144))
+	pbv.midpower -= 1.0 / 144
+	if power < pbv.midpowerMin {
+		pbv.midpowerMin += (power - pbv.midpowerMin) * (1 / (12 - (power-pbv.midpowerMin)*144))
 	} else {
-		pbr.midpowerMin = power
+		pbv.midpowerMin = power
 	}
-	if pbr.midpower < pbr.midpowerMin {
-		pbr.midpower = pbr.midpowerMin
+	if pbv.midpower < pbv.midpowerMin {
+		pbv.midpower = pbv.midpowerMin
 	}
-	if level > pbr.prevLevel {
+	if level > pbv.prevLevel {
 		i := Min(8, level-1)
 		snd.play(pb.level_snd[i], 100, 0)
 	}
-	pbr.prevLevel = level
+	pbv.prevLevel = level
 	pb.bg0.Action()
 	pb.bg1.Action()
 	pb.bg2.Action()
@@ -503,7 +500,7 @@ func (pb *PowerBar) bgDraw(layerno int16) {
 	pb.bg1.Draw(float32(pb.pos[0])+sys.lifebarOffsetX, float32(pb.pos[1]), layerno, sys.lifebarScale)
 	pb.bg2.Draw(float32(pb.pos[0])+sys.lifebarOffsetX, float32(pb.pos[1]), layerno, sys.lifebarScale)
 }
-func (pb *PowerBar) draw(layerno int16, ref int, pbr *PowerBar, f []*Fnt) {
+func (pb *PowerBar) draw(layerno int16, ref int, pbv *PowerBarValues, f []*Fnt) {
 	p := sys.getChar(ref, 0)
 	pbval := p.getPower()
 	power := float32(pbval) / float32(p.powerMax)
@@ -523,7 +520,7 @@ func (pb *PowerBar) draw(layerno int16, ref int, pbr *PowerBar, f []*Fnt) {
 		}
 		return
 	}
-	pr, mr := width(power), width(pbr.midpower)
+	pr, mr := width(power), width(pbv.midpower)
 	if pb.range_x[0] < pb.range_x[1] {
 		mr[0] += pr[2]
 	}
@@ -945,7 +942,7 @@ func readLifeBarFace(pre string, is IniSection,
 	fa.teammate_face_lay = *ReadLayout(pre+"teammate.face.", is, 0)
 	return fa
 }
-func (fa *LifeBarFace) step(ref int, far *LifeBarFace, fav *LifeBarFaceValues) {
+func (fa *LifeBarFace) step(ref int, fav *LifeBarFaceValues) {
 	group, number := int16(fa.face_spr[0]), int16(fa.face_spr[1])
 	p := sys.getChar(ref, 0)
 	if p != nil {
@@ -2897,6 +2894,9 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 		hb: [...][]HealthBarValues{make([]HealthBarValues, 2), make([]HealthBarValues, 8),
 			make([]HealthBarValues, 2), make([]HealthBarValues, 8), make([]HealthBarValues, 6),
 			make([]HealthBarValues, 8), make([]HealthBarValues, 6), make([]HealthBarValues, 8)},
+		pb: [...][]PowerBarValues{make([]PowerBarValues, 2), make([]PowerBarValues, 8),
+			make([]PowerBarValues, 2), make([]PowerBarValues, 8), make([]PowerBarValues, 6),
+			make([]PowerBarValues, 8), make([]PowerBarValues, 6), make([]PowerBarValues, 8)},
 		fa: [...][]LifeBarFaceValues{make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8),
 			make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6),
 			make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6), make([]LifeBarFaceValues, 8)}}
@@ -3047,9 +3047,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "powerbar":
 			if l.pb[0][0] == nil {
+				lbv.pb[0][0] = *newPowerBarValues()
 				l.pb[0][0] = readPowerBar("p1.", is, l.sff, l.at, l.fnt[:])
 			}
 			if l.pb[0][1] == nil {
+				lbv.pb[0][1] = *newPowerBarValues()
 				l.pb[0][1] = readPowerBar("p2.", is, l.sff, l.at, l.fnt[:])
 			}
 		case "guardbar":
@@ -3096,9 +3098,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 				}
 			case len(subname) >= 8 && subname[:8] == "powerbar":
 				if l.pb[2][0] == nil {
+					lbv.pb[2][0] = *newPowerBarValues()
 					l.pb[2][0] = readPowerBar("p1.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.pb[2][1] == nil {
+					lbv.pb[2][1] = *newPowerBarValues()
 					l.pb[2][1] = readPowerBar("p2.", is, l.sff, l.at, l.fnt[:])
 				}
 			case len(subname) >= 8 && subname[:8] == "guardbar":
@@ -3185,28 +3189,36 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 				}
 			case len(subname) >= 8 && subname[:8] == "powerbar":
 				if l.pb[i][0] == nil {
+					lbv.pb[i][0] = *newPowerBarValues()
 					l.pb[i][0] = readPowerBar("p1.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.pb[i][1] == nil {
+					lbv.pb[i][1] = *newPowerBarValues()
 					l.pb[i][1] = readPowerBar("p2.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.pb[i][2] == nil {
+					lbv.pb[i][2] = *newPowerBarValues()
 					l.pb[i][2] = readPowerBar("p3.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.pb[i][3] == nil {
+					lbv.pb[i][3] = *newPowerBarValues()
 					l.pb[i][3] = readPowerBar("p4.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.pb[i][4] == nil {
+					lbv.pb[i][4] = *newPowerBarValues()
 					l.pb[i][4] = readPowerBar("p5.", is, l.sff, l.at, l.fnt[:])
 				}
 				if l.pb[i][5] == nil {
+					lbv.pb[i][5] = *newPowerBarValues()
 					l.pb[i][5] = readPowerBar("p6.", is, l.sff, l.at, l.fnt[:])
 				}
 				if i != 4 && i != 6 {
 					if l.pb[i][6] == nil {
+						lbv.pb[i][6] = *newPowerBarValues()
 						l.pb[i][6] = readPowerBar("p7.", is, l.sff, l.at, l.fnt[:])
 					}
 					if l.pb[i][7] == nil {
+						lbv.pb[i][7] = *newPowerBarValues()
 						l.pb[i][7] = readPowerBar("p8.", is, l.sff, l.at, l.fnt[:])
 					}
 				}
@@ -3576,15 +3588,15 @@ func (l *Lifebar) step() {
 	for ti := range sys.tmode {
 		for i, v := range l.order[ti] {
 			//HealthBar
-			l.hb[l.ref[ti]][i*2+ti].step(v, l.hb[l.ref[ti]][v], &sys.gs.lb.hb[l.ref[ti]][v])
+			l.hb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.hb[l.ref[ti]][v])
 			//PowerBar
-			l.pb[l.ref[ti]][i*2+ti].step(v, l.pb[l.ref[ti]][v], l.snd)
+			l.pb[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.pb[l.ref[ti]][v], l.snd)
 			//GuardBar
 			l.gb[l.ref[ti]][i*2+ti].step(v, l.gb[l.ref[ti]][v], l.snd)
 			//StunBar
 			l.sb[l.ref[ti]][i*2+ti].step(v, l.sb[l.ref[ti]][v], l.snd)
 			//LifeBarFace
-			l.fa[l.ref[ti]][i*2+ti].step(v, l.fa[l.ref[ti]][v], &sys.gs.lb.fa[l.ref[ti]][v])
+			l.fa[l.ref[ti]][i*2+ti].step(v, &sys.gs.lb.fa[l.ref[ti]][v])
 			//LifeBarName
 			l.nm[l.ref[ti]][i*2+ti].step()
 		}
@@ -3771,7 +3783,7 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			for ti := range sys.tmode {
 				for i, v := range l.order[ti] {
-					l.hb[l.ref[ti]][i*2+ti].draw(layerno, v, l.hb[l.ref[ti]][v], &sys.gs.lb.hb[l.ref[ti]][v], l.fnt[:])
+					l.hb[l.ref[ti]][i*2+ti].draw(layerno, v, &sys.gs.lb.hb[l.ref[ti]][v], l.fnt[:])
 				}
 			}
 			//PowerBar
@@ -3793,10 +3805,10 @@ func (l *Lifebar) draw(layerno int16) {
 					if !sys.getChar(i*2+ti, 0).sf(CSF_nopowerbardisplay) {
 						if sys.powerShare[ti] && (tm == TM_Simul || tm == TM_Tag) {
 							if i == 0 {
-								l.pb[l.ref[ti]][i*2+ti].draw(layerno, i*2+ti, l.pb[l.ref[ti]][i*2+ti], l.fnt[:])
+								l.pb[l.ref[ti]][i*2+ti].draw(layerno, i*2+ti, &sys.gs.lb.pb[l.ref[ti]][i*2+ti], l.fnt[:])
 							}
 						} else {
-							l.pb[l.ref[ti]][i*2+ti].draw(layerno, v, l.pb[l.ref[ti]][v], l.fnt[:])
+							l.pb[l.ref[ti]][i*2+ti].draw(layerno, v, &sys.gs.lb.pb[l.ref[ti]][v], l.fnt[:])
 						}
 					}
 				}
