@@ -13,6 +13,15 @@ func newHealthBarValues() *HealthBarValues {
 	return &HealthBarValues{oldlife: 1, midlife: 1, midlifeMin: 1}
 }
 
+type LifeBarFaceValues struct {
+	face             *Sprite
+	old_spr, old_pal [2]int32
+}
+
+func newLifeBarFaceValues() *LifeBarFaceValues {
+	return &LifeBarFaceValues{}
+}
+
 type LifeBarWinIconValues struct {
 	wins          []WinType
 	numWins       int
@@ -133,6 +142,7 @@ func newLifeBarWinCountValues() *LifeBarWinCountValues {
 
 type LifebarValues struct {
 	hb [8][]HealthBarValues
+	fa [8][]LifeBarFaceValues
 	wi [2]LifeBarWinIconValues
 	co [2]LifeBarComboValues
 	ac [2]LifeBarActionValues
@@ -153,6 +163,11 @@ func (lbv *LifebarValues) clone() (result *LifebarValues) {
 	for i := range lbv.hb {
 		result.hb[i] = make([]HealthBarValues, len(lbv.hb[i]))
 		copy(result.hb[i], lbv.hb[i])
+	}
+
+	for i := range lbv.fa {
+		result.fa[i] = make([]LifeBarFaceValues, len(lbv.fa[i]))
+		copy(result.fa[i], lbv.fa[i])
 	}
 
 	for i := range lbv.wi {

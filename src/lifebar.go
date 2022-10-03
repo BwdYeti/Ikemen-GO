@@ -892,7 +892,6 @@ type LifeBarFace struct {
 	top               AnimLayout
 	ko                AnimLayout
 	face_spr          [2]int32
-	face              *Sprite
 	face_lay          Layout
 	palshare          bool
 	palfxshare        bool
@@ -909,7 +908,6 @@ type LifeBarFace struct {
 	teammate_face_lay Layout
 	teammate_scale    []float32
 	numko             int32
-	old_spr, old_pal  [2]int32
 }
 
 func newLifeBarFace() *LifeBarFace {
@@ -947,7 +945,7 @@ func readLifeBarFace(pre string, is IniSection,
 	fa.teammate_face_lay = *ReadLayout(pre+"teammate.face.", is, 0)
 	return fa
 }
-func (fa *LifeBarFace) step(ref int, far *LifeBarFace) {
+func (fa *LifeBarFace) step(ref int, far *LifeBarFace, fav *LifeBarFaceValues) {
 	group, number := int16(fa.face_spr[0]), int16(fa.face_spr[1])
 	p := sys.getChar(ref, 0)
 	if p != nil {
@@ -957,11 +955,11 @@ func (fa *LifeBarFace) step(ref int, far *LifeBarFace) {
 			}
 		}
 	}
-	if far.old_spr[0] != int32(group) || far.old_spr[1] != int32(number) ||
-		far.old_pal[0] != sys.cgi[ref].remappedpal[0] || far.old_pal[1] != sys.cgi[ref].remappedpal[1] {
-		far.face = sys.cgi[ref].sff.getOwnPalSprite(group, number)
-		far.old_spr = [...]int32{int32(group), int32(number)}
-		far.old_pal = [...]int32{sys.cgi[ref].remappedpal[0], sys.cgi[ref].remappedpal[1]}
+	if fav.old_spr[0] != int32(group) || fav.old_spr[1] != int32(number) ||
+		fav.old_pal[0] != sys.cgi[ref].remappedpal[0] || fav.old_pal[1] != sys.cgi[ref].remappedpal[1] {
+		fav.face = sys.cgi[ref].sff.getOwnPalSprite(group, number)
+		fav.old_spr = [...]int32{int32(group), int32(number)}
+		fav.old_pal = [...]int32{sys.cgi[ref].remappedpal[0], sys.cgi[ref].remappedpal[1]}
 	}
 	fa.bg.Action()
 	fa.bg0.Action()
@@ -976,7 +974,7 @@ func (fa *LifeBarFace) step(ref int, far *LifeBarFace) {
 	fa.teammate_top.Action()
 	fa.teammate_ko.Action()
 }
-func (fa *LifeBarFace) reset() {
+func (fa *LifeBarFace) reset(fav *LifeBarFaceValues) {
 	fa.bg.Reset()
 	fa.bg0.Reset()
 	fa.bg1.Reset()
@@ -990,8 +988,8 @@ func (fa *LifeBarFace) reset() {
 	fa.teammate_top.Reset()
 	fa.teammate_ko.Reset()
 	if !sys.roundResetFlg {
-		fa.old_spr = [2]int32{}
-		fa.old_pal = [2]int32{}
+		fav.old_spr = [2]int32{}
+		fav.old_pal = [2]int32{}
 	}
 }
 func (fa *LifeBarFace) bgDraw(layerno int16) {
@@ -1000,9 +998,9 @@ func (fa *LifeBarFace) bgDraw(layerno int16) {
 	fa.bg1.Draw(float32(fa.pos[0])+sys.lifebarOffsetX, float32(fa.pos[1]), layerno, sys.lifebarScale)
 	fa.bg2.Draw(float32(fa.pos[0])+sys.lifebarOffsetX, float32(fa.pos[1]), layerno, sys.lifebarScale)
 }
-func (fa *LifeBarFace) draw(layerno int16, ref int, far *LifeBarFace) {
+func (fa *LifeBarFace) draw(layerno int16, ref int, far *LifeBarFace, fav *LifeBarFaceValues) {
 	p := sys.getChar(ref, 0)
-	if far.face != nil {
+	if fav.face != nil {
 		pfx := newPalFX()
 		if far.palfxshare {
 			pfx = p.getPalfx()
@@ -1010,8 +1008,8 @@ func (fa *LifeBarFace) draw(layerno int16, ref int, far *LifeBarFace) {
 		if far.palshare {
 			sys.cgi[ref].sff.palList.SwapPalMap(&p.getPalfx().remap)
 		}
-		far.face.Pal = nil
-		far.face.Pal = far.face.GetPal(&sys.cgi[ref].sff.palList)
+		fav.face.Pal = nil
+		fav.face.Pal = fav.face.GetPal(&sys.cgi[ref].sff.palList)
 		if far.palshare {
 			sys.cgi[ref].sff.palList.SwapPalMap(&p.getPalfx().remap)
 		}
@@ -1020,7 +1018,7 @@ func (fa *LifeBarFace) draw(layerno int16, ref int, far *LifeBarFace) {
 			sys.brightness = 256
 		}
 		fa.face_lay.DrawSprite((float32(fa.pos[0])+sys.lifebarOffsetX)*sys.lifebarScale, float32(fa.pos[1])*sys.lifebarScale, layerno,
-			far.face, pfx, sys.cgi[ref].portraitscale*sys.lifebarPortraitScale, &fa.face_lay.window)
+			fav.face, pfx, sys.cgi[ref].portraitscale*sys.lifebarPortraitScale, &fa.face_lay.window)
 		if !p.alive() {
 			fa.ko.Draw(float32(fa.pos[0])+sys.lifebarOffsetX, float32(fa.pos[1]), layerno, sys.lifebarScale)
 		}
@@ -2895,9 +2893,13 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 		return nil, nil, err
 	}
 	// Initialize Lifebar Values in Game State
-	lbv := &LifebarValues{hb: [...][]HealthBarValues{make([]HealthBarValues, 2), make([]HealthBarValues, 8),
-		make([]HealthBarValues, 2), make([]HealthBarValues, 8), make([]HealthBarValues, 6),
-		make([]HealthBarValues, 8), make([]HealthBarValues, 6), make([]HealthBarValues, 8)}}
+	lbv := &LifebarValues{
+		hb: [...][]HealthBarValues{make([]HealthBarValues, 2), make([]HealthBarValues, 8),
+			make([]HealthBarValues, 2), make([]HealthBarValues, 8), make([]HealthBarValues, 6),
+			make([]HealthBarValues, 8), make([]HealthBarValues, 6), make([]HealthBarValues, 8)},
+		fa: [...][]LifeBarFaceValues{make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8),
+			make([]LifeBarFaceValues, 2), make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6),
+			make([]LifeBarFaceValues, 8), make([]LifeBarFaceValues, 6), make([]LifeBarFaceValues, 8)}}
 
 	l := &Lifebar{sff: &Sff{}, fsff: &Sff{}, snd: &Snd{},
 		hb: [...][]*HealthBar{make([]*HealthBar, 2), make([]*HealthBar, 8),
@@ -3066,9 +3068,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "face":
 			if l.fa[0][0] == nil {
+				lbv.fa[0][0] = *newLifeBarFaceValues()
 				l.fa[0][0] = readLifeBarFace("p1.", is, l.sff, l.at)
 			}
 			if l.fa[0][1] == nil {
+				lbv.fa[0][1] = *newLifeBarFaceValues()
 				l.fa[0][1] = readLifeBarFace("p2.", is, l.sff, l.at)
 			}
 		case "name":
@@ -3113,9 +3117,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 				}
 			case len(subname) >= 4 && subname[:4] == "face":
 				if l.fa[2][0] == nil {
+					lbv.fa[2][0] = *newLifeBarFaceValues()
 					l.fa[2][0] = readLifeBarFace("p1.", is, l.sff, l.at)
 				}
 				if l.fa[2][1] == nil {
+					lbv.fa[2][1] = *newLifeBarFaceValues()
 					l.fa[2][1] = readLifeBarFace("p2.", is, l.sff, l.at)
 				}
 			case len(subname) >= 4 && subname[:4] == "name":
@@ -3260,28 +3266,36 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 				}
 			case len(subname) >= 4 && subname[:4] == "face":
 				if l.fa[i][0] == nil {
+					lbv.fa[i][0] = *newLifeBarFaceValues()
 					l.fa[i][0] = readLifeBarFace("p1.", is, l.sff, l.at)
 				}
 				if l.fa[i][1] == nil {
+					lbv.fa[i][1] = *newLifeBarFaceValues()
 					l.fa[i][1] = readLifeBarFace("p2.", is, l.sff, l.at)
 				}
 				if l.fa[i][2] == nil {
+					lbv.fa[i][2] = *newLifeBarFaceValues()
 					l.fa[i][2] = readLifeBarFace("p3.", is, l.sff, l.at)
 				}
 				if l.fa[i][3] == nil {
+					lbv.fa[i][3] = *newLifeBarFaceValues()
 					l.fa[i][3] = readLifeBarFace("p4.", is, l.sff, l.at)
 				}
 				if l.fa[i][4] == nil {
+					lbv.fa[i][4] = *newLifeBarFaceValues()
 					l.fa[i][4] = readLifeBarFace("p5.", is, l.sff, l.at)
 				}
 				if l.fa[i][5] == nil {
+					lbv.fa[i][5] = *newLifeBarFaceValues()
 					l.fa[i][5] = readLifeBarFace("p6.", is, l.sff, l.at)
 				}
 				if i != 4 && i != 6 {
 					if l.fa[i][6] == nil {
+						lbv.fa[i][6] = *newLifeBarFaceValues()
 						l.fa[i][6] = readLifeBarFace("p7.", is, l.sff, l.at)
 					}
 					if l.fa[i][7] == nil {
+						lbv.fa[i][7] = *newLifeBarFaceValues()
 						l.fa[i][7] = readLifeBarFace("p8.", is, l.sff, l.at)
 					}
 				}
@@ -3570,7 +3584,7 @@ func (l *Lifebar) step() {
 			//StunBar
 			l.sb[l.ref[ti]][i*2+ti].step(v, l.sb[l.ref[ti]][v], l.snd)
 			//LifeBarFace
-			l.fa[l.ref[ti]][i*2+ti].step(v, l.fa[l.ref[ti]][v])
+			l.fa[l.ref[ti]][i*2+ti].step(v, l.fa[l.ref[ti]][v], &sys.gs.lb.fa[l.ref[ti]][v])
 			//LifeBarName
 			l.nm[l.ref[ti]][i*2+ti].step()
 		}
@@ -3703,9 +3717,9 @@ func (l *Lifebar) reset() {
 			sb[i].reset()
 		}
 	}
-	for _, fa := range l.fa {
-		for i := range fa {
-			fa[i].reset()
+	for i := range l.fa {
+		for j := range l.fa[i] {
+			l.fa[i][j].reset(&sys.gs.lb.fa[i][j])
 		}
 	}
 	for _, nm := range l.nm {
@@ -3817,7 +3831,7 @@ func (l *Lifebar) draw(layerno int16) {
 			}
 			for ti := range sys.tmode {
 				for i, v := range l.order[ti] {
-					l.fa[l.ref[ti]][i*2+ti].draw(layerno, v, l.fa[l.ref[ti]][v])
+					l.fa[l.ref[ti]][i*2+ti].draw(layerno, v, l.fa[l.ref[ti]][v], &sys.gs.lb.fa[l.ref[ti]][v])
 				}
 			}
 			//LifeBarName
