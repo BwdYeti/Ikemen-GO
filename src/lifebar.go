@@ -2694,7 +2694,6 @@ type LifeBarAiLevel struct {
 	separator string
 	places    int32
 	enabled   map[string]bool
-	active    bool
 }
 
 func newLifeBarAiLevel() *LifeBarAiLevel {
@@ -2728,13 +2727,13 @@ func (ai *LifeBarAiLevel) reset() {
 	ai.bg.Reset()
 	ai.top.Reset()
 }
-func (ai *LifeBarAiLevel) bgDraw(layerno int16) {
-	if ai.active {
+func (ai *LifeBarAiLevel) bgDraw(layerno int16, aiv *LifeBarAiLevelValues) {
+	if aiv.active {
 		ai.bg.Draw(float32(ai.pos[0])+sys.lifebarOffsetX, float32(ai.pos[1]), layerno, sys.lifebarScale)
 	}
 }
-func (ai *LifeBarAiLevel) draw(layerno int16, f []*Fnt, ailv float32) {
-	if ai.active && ailv > 0 && ai.text.font[0] >= 0 && int(ai.text.font[0]) < len(f) && f[ai.text.font[0]] != nil {
+func (ai *LifeBarAiLevel) draw(layerno int16, aiv *LifeBarAiLevelValues, f []*Fnt, ailv float32) {
+	if aiv.active && ailv > 0 && ai.text.font[0] >= 0 && int(ai.text.font[0]) < len(f) && f[ai.text.font[0]] != nil {
 		text := ai.text.text
 		//split float value
 		s := strings.Split(fmt.Sprintf("%f", ailv), ".")
@@ -3391,9 +3390,11 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 			}
 		case "ailevel":
 			if l.ai[0] == nil {
+				lbv.ai[0] = *newLifeBarAiLevelValues()
 				l.ai[0] = readLifeBarAiLevel("p1.", is, l.sff, l.at, l.fnt[:])
 			}
 			if l.ai[1] == nil {
+				lbv.ai[1] = *newLifeBarAiLevelValues()
 				l.ai[1] = readLifeBarAiLevel("p2.", is, l.sff, l.at, l.fnt[:])
 			}
 		case "wincount":
@@ -3512,8 +3513,6 @@ func loadLifebar(deffile string) (*Lifebar, *LifebarValues, error) {
 func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lb, lbv, _ := loadLifebar(l.deffile)
 	lb.ti.framespercount = l.ti.framespercount
-	lb.ai[0].active = l.ai[0].active
-	lb.ai[1].active = l.ai[1].active
 	lb.wc[0].active = l.wc[0].active
 	lb.wc[1].active = l.wc[1].active
 	lb.active = l.active
@@ -3530,6 +3529,8 @@ func (l *Lifebar) reloadLifebar(oldLbv *LifebarValues) {
 	lbv.sc[0].active = oldLbv.sc[0].active
 	lbv.sc[1].active = oldLbv.sc[1].active
 	lbv.ma.active = oldLbv.ma.active
+	lbv.ai[0].active = oldLbv.ai[0].active
+	lbv.ai[1].active = oldLbv.ai[1].active
 
 	sys.lifebar = *lb
 	sys.gs.lb = *lbv
@@ -3870,10 +3871,10 @@ func (l *Lifebar) draw(layerno int16) {
 			l.ma.draw(layerno, &sys.gs.lb.ma, l.fnt[:])
 			//LifeBarAiLevel
 			for i := range l.ai {
-				l.ai[i].bgDraw(layerno)
+				l.ai[i].bgDraw(layerno, &sys.gs.lb.ai[i])
 			}
 			for i := range l.ai {
-				l.ai[i].draw(layerno, l.fnt[:], sys.com[sys.getChar(i, 0).playerNo])
+				l.ai[i].draw(layerno, &sys.gs.lb.ai[i], l.fnt[:], sys.com[sys.getChar(i, 0).playerNo])
 			}
 			//LifeBarWinCount
 			for i := range l.wc {

@@ -1971,9 +1971,11 @@ func systemScriptInit(l *lua.LState) {
 		if _, ok := sys.lifebar.ma.enabled[sys.gameMode]; ok {
 			sys.gs.lb.ma.active = sys.lifebar.ma.enabled[sys.gameMode]
 		}
-		for _, v := range sys.lifebar.ai {
+		for i := range sys.lifebar.ai {
+			v := sys.lifebar.ai[i]
+			aiv := sys.gs.lb.ai[i]
 			if _, ok := v.enabled[sys.gameMode]; ok {
-				v.active = v.enabled[sys.gameMode]
+				aiv.active = v.enabled[sys.gameMode]
 			}
 		}
 		for i := range sys.lifebar.sc {
@@ -2009,13 +2011,13 @@ func systemScriptInit(l *lua.LState) {
 				case "mode": //enabled by default
 					sys.lifebar.mode = lua.LVAsBool(value)
 				case "p1aiLevel":
-					sys.lifebar.ai[0].active = lua.LVAsBool(value)
+					sys.gs.lb.ai[0].active = lua.LVAsBool(value)
 				case "p1score":
 					sys.gs.lb.sc[0].active = lua.LVAsBool(value)
 				case "p1winCount":
 					sys.lifebar.wc[0].active = lua.LVAsBool(value)
 				case "p2aiLevel":
-					sys.lifebar.ai[1].active = lua.LVAsBool(value)
+					sys.gs.lb.ai[1].active = lua.LVAsBool(value)
 				case "p2score":
 					sys.gs.lb.sc[1].active = lua.LVAsBool(value)
 				case "p2winCount":
