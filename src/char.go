@@ -1726,7 +1726,7 @@ type Char struct {
 	targets         []int32
 	targetsOfHitdef []int32
 	enemynear       [2][]int32
-	p2enemy         []*Char
+	p2enemy         []int32
 	pos             [3]float32
 	drawPos         [3]float32
 	oldPos          [3]float32
@@ -6015,10 +6015,11 @@ func (c *Char) tick() {
 				c.playSound("", false, false, 11, 0, -1, vo, 0, 1, c.localscl, &c.pos[0], false, 0)
 			}
 			c.setSCF(SCF_ko)
-			for _, cl := range sys.charList.runOrder {
-				for i, p2cl := range cl.p2enemy {
-					if p2cl == c {
-						cl.p2enemy = cl.p2enemy[:i+copy(cl.p2enemy[i:], cl.p2enemy[i+1:])]
+			for _, cidx := range sys.gs.charList.runOrder {
+				c := &sys.gs.charArray[cidx]
+				for i, p2cidx := range c.p2enemy {
+					if int(p2cidx) == cidx {
+						c.p2enemy = c.p2enemy[:i+copy(c.p2enemy[i:], c.p2enemy[i+1:])]
 						break
 					}
 				}
