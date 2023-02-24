@@ -18,8 +18,6 @@ import (
 
 	"github.com/faiface/beep"
 	"github.com/faiface/beep/speaker"
-	gl "github.com/fyne-io/gl-js"
-	glfw "github.com/fyne-io/glfw-js"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -53,8 +51,10 @@ var sys = System{
 	soundChannels:     newSoundChannels(16),
 	allPalFX:          *newPalFX(),
 	bgPalFX:           *newPalFX(),
+	ffx:               make(map[string]*FightFx),
+	ffxRegexp:         "^(f)|^(s)|^(go)",
 	sel:               *newSelect(),
-	keyState:          make(map[glfw.Key]bool),
+	keyState:          make(map[Key]bool),
 	match:             1,
 	listenPort:        "7500",
 	loader:            *newLoader(),
@@ -71,7 +71,7 @@ var sys = System{
 	mainThreadTask:        make(chan func(), 65536),
 	workpal:               make([]uint32, 256),
 	errLog:                log.New(NewLogWriter(), "", log.LstdFlags),
-	keyInput:              glfw.KeyUnknown,
+	keyInput:              KeyUnknown,
 	wavChannels:           256,
 	comboExtraFrameWindow: 1,
 	fontShaderVer:         120,
@@ -219,8 +219,10 @@ type System struct {
 	soundChannels           *SoundChannels
 	allPalFX, bgPalFX       PalFX
 	lifebar                 Lifebar
+	ffx                     map[string]*FightFx
+	ffxRegexp               string
 	sel                     Select
-	keyState                map[glfw.Key]bool
+	keyState                map[Key]bool
 	netInput                *NetInput
 	fileInput               *FileInput
 	keyConfig               []KeyConfig
@@ -311,8 +313,9 @@ type System struct {
 	zoomScale               float32
 	zoomPosXLag             float32
 	zoomPosYLag             float32
-	enableZoomstate         bool
+	enableZoomtime          int32
 	zoomCameraBound         bool
+	zoomStageBound          bool
 	zoomPos                 [2]float32
 	debugWC                 *Char
 	finish                  FinishType
@@ -349,9 +352,7 @@ type System struct {
 	loseTag                 bool
 	allowDebugKeys          bool
 	allowDebugMode          bool
-	commonAir               string
-	commonCmd               string
-	keyInput                glfw.Key
+	keyInput                Key
 	keyString               string
 	timerCount              []int32
 	cmdFlags                map[string]string
@@ -363,6 +364,14 @@ type System struct {
 	windowTitle             string
 	screenshotFolder        string
 	//FLAC_FrameWait          int
+	
+	// Common Files
+	commonAir    string
+	commonCmd    string
+	commonConst  string
+	commonFx     []string
+	commonLua    []string
+	commonStates []string
 
 	// Resolution variables
 	fullscreen            bool
@@ -404,45 +413,46 @@ type System struct {
 	vRetrace   int
 	pngFilter  bool // Controls the GL_TEXTURE_MAG_FILTER on 32bit sprites
 
-	gameMode        string
-	frameCounter    int32
-	motifDir        string
-	captureNum      int
-	roundType       [2]RoundType
-	timerStart      int32
-	timerRounds     []int32
-	scoreStart      [2]float32
-	scoreRounds     [][2]float32
-	matchData       *lua.LTable
-	consecutiveWins [2]int32
-	teamLeader      [2]int
-	commonConst     string
-	commonLua       []string
-	commonStates    []string
-	gameSpeed       float32
-	maxPowerMode    bool
-	clsnText        []ClsnText
-	consoleText     []string
-	consoleRows     int
-	clipboardRows   int
-	luaLState       *lua.LState
-	statusLFunc     *lua.LFunction
-	listLFunc       []*lua.LFunction
-	introSkipped    bool
-	endMatch        bool
-	continueFlg     bool
-	dialogueFlg     bool
-	dialogueForce   int
-	dialogueBarsFlg bool
-	noSoundFlg      bool
-	postMatchFlg    bool
-	playBgmFlg      bool
-	brightnessOld   int32
-	clsnDarken      bool
-	maxBgmVolume    int
-	stereoEffects   bool
-	panningRange    float32
-	windowCentered  bool
+	gameMode          string
+	frameCounter      int32
+	preFightTime      int32
+	motifDir          string
+	captureNum        int
+	roundType         [2]RoundType
+	timerStart        int32
+	timerRounds       []int32
+	scoreStart        [2]float32
+	scoreRounds       [][2]float32
+	matchData         *lua.LTable
+	consecutiveWins   [2]int32
+	consecutiveRounds bool
+	teamLeader        [2]int
+	gameSpeed         float32
+	maxPowerMode      bool
+	clsnText          []ClsnText
+	consoleText       []string
+	consoleRows       int
+	clipboardRows     int
+	luaLState         *lua.LState
+	statusLFunc       *lua.LFunction
+	listLFunc         []*lua.LFunction
+	introSkipped      bool
+	endMatch          bool
+	continueFlg       bool
+	dialogueFlg       bool
+	dialogueForce     int
+	dialogueBarsFlg   bool
+	noSoundFlg        bool
+	postMatchFlg      bool
+	playBgmFlg        bool
+	brightnessOld     int32
+	clsnDarken        bool
+	maxBgmVolume      int
+	stereoEffects     bool
+	panningRange      float32
+	windowCentered    bool
+	loopBreak         bool
+	loopContinue      bool
 }
 
 // Initialize stuff, this is called after the config int at main.go
@@ -459,7 +469,7 @@ func (s *System) init(w, h int32) *lua.LState {
 	}
 
 	// Loading of external shader data.
-	// We need to do this before the render initialization at "RenderInit()"
+	// We need to do this before the render initialization at "gfx.Init()"
 	if len(s.externalShaderList) > 0 {
 		// First we initialize arrays.
 		s.externalShaders = make([][]string, 2)
@@ -491,8 +501,9 @@ func (s *System) init(w, h int32) *lua.LState {
 	}
 	// PS: The "\x00" is what is know as Null Terminator.
 
-	// Now we proceed to int the render.
-	RenderInit()
+	// Now we proceed to init the render.
+	gfx.Init()
+	gfx.BeginFrame(false)
 	// And the audio.
 	speaker.Init(audioFrequency, audioOutLen)
 	speaker.Play(NewNormalizer(s.soundMixer))
@@ -547,6 +558,8 @@ func (s *System) shutdown() {
 	if !sys.gameEnd {
 		sys.gameEnd = true
 	}
+	gfx.Close()
+	s.window.Close()
 	speaker.Close()
 }
 func (s *System) setWindowSize(w, h int32) {
@@ -578,13 +591,15 @@ func (s *System) runMainThreadTask() {
 		}
 	}
 }
+
 func (s *System) await(fps int) bool {
 	if !s.frameSkip {
 		// Render the finished frame
-		renderer.EndFrame()
+		gfx.EndFrame()
 		s.window.SwapBuffers()
-		// Begin the next frame
-		renderer.BeginFrame()
+		// Begin the next frame after events have been processed. Do not clear
+		// the screen if network input is present.
+		defer gfx.BeginFrame(sys.netInput == nil)
 	}
 	s.runMainThreadTask()
 	now := time.Now()
@@ -607,18 +622,14 @@ func (s *System) await(fps int) bool {
 		s.frameSkip = true
 	}
 	s.eventUpdate()
-	if !s.frameSkip {
-		//var width, height = glfw.GetCurrentContext().GetFramebufferSize()
-		//gl.Viewport(0, 0, int32(width), int32(height))
-		gl.Viewport(0, 0, int(s.scrrect[2]), int(s.scrrect[3]))
-		if s.netInput == nil {
-			gl.Clear(gl.COLOR_BUFFER_BIT)
-		}
-	}
 	return !s.gameEnd
 }
+
 func (s *System) update() bool {
 	s.frameCounter++
+	if s.gs.gameTime == 0 {
+		s.preFightTime = s.frameCounter
+	}
 	if s.fileInput != nil {
 		if s.anyHardButton() {
 			s.await(FPS * 4)
@@ -643,18 +654,7 @@ func (s *System) tickSound() {
 		}
 	}
 
-	if !s.nomusic {
-		speaker.Lock()
-		if s.bgm.ctrl != nil && s.bgm.streamer != nil {
-			s.bgm.ctrl.Paused = false
-			// if s.bgm.bgmLoopEnd > 0 && s.bgm.streamer.Position() >= s.bgm.bgmLoopEnd {
-				// s.bgm.streamer.Seek(s.bgm.bgmLoopStart)
-			// }
-		}
-		speaker.Unlock()
-	} else {
-		s.bgm.Pause()
-	}
+	s.bgm.SetPaused(s.nomusic || s.paused)
 
 	//if s.FLAC_FrameWait >= 0 {
 	//	if s.FLAC_FrameWait == 0 {
@@ -983,7 +983,7 @@ func (s *System) nextRound() {
 	}
 	for _, p := range s.getPlayers() {
 		if p != nil {
-			p.selfState(5900, 0, -1, 0, false)
+			p.selfState(5900, 0, -1, 0, "")
 		}
 	}
 }
@@ -1121,7 +1121,7 @@ func (s *System) posReset() {
 		}
 	}
 }
-func (s *System) action(x, y, scl *float32) {
+func (s *System) action() {
 	s.sprites = s.sprites[:0]
 	s.topSprites = s.topSprites[:0]
 	s.bottomSprites = s.bottomSprites[:0]
@@ -1132,9 +1132,14 @@ func (s *System) action(x, y, scl *float32) {
 	s.drawc2mtk = s.drawc2mtk[:0]
 	s.drawwh = s.drawwh[:0]
 	s.clsnText = nil
+	var x, y, scl float32 = s.gs.ac.x, s.gs.ac.y, s.gs.ac.scl
 	var cvmin, cvmax, highest, lowest, leftest, rightest float32 = 0, 0, 0, 0, 0, 0
-	leftest, rightest = *x, *x
-
+	leftest, rightest = x, x
+	if s.gs.cam.ytensionenable {
+		if y < 0 {
+			lowest = (y - s.gs.cam.CameraZoomYBound)
+		}
+	}
 	if s.tickFrame() {
 		s.xmin = s.gs.cam.ScreenPos[0] + s.gs.cam.Offset[0] + s.screenleft
 		s.xmax = s.gs.cam.ScreenPos[0] + s.gs.cam.Offset[0] +
@@ -1144,13 +1149,17 @@ func (s *System) action(x, y, scl *float32) {
 			s.xmax = s.xmin
 		}
 		s.allPalFX.step()
-		s.bgPalFX.step()
+		//s.bgPalFX.step()
 		s.envShake.next()
 		if s.envcol_time > 0 {
 			s.envcol_time--
 		}
-		s.enableZoomstate = false
-		s.zoomCameraBound = true
+		if s.enableZoomtime > 0 {
+			s.enableZoomtime--
+		} else {
+			s.zoomCameraBound = true
+			s.zoomStageBound = true
+		}
 		if s.super > 0 {
 			s.super--
 		} else if s.pause > 0 {
@@ -1174,7 +1183,7 @@ func (s *System) action(x, y, scl *float32) {
 		if s.superanim != nil {
 			s.superanim.Action()
 		}
-		s.gs.charList.action(*x, &cvmin, &cvmax,
+		s.gs.charList.action(x, &cvmin, &cvmax,
 			&highest, &lowest, &leftest, &rightest)
 		s.nomusic = s.sf(GSF_nomusic) && !sys.postMatchFlg
 	} else {
@@ -1183,10 +1192,10 @@ func (s *System) action(x, y, scl *float32) {
 	s.lifebar.step(&s.gs.lb)
 
 	// Action camera
-	var newx, newy float32 = *x, *y
+	leftest -= x
+	rightest -= x
+	var newx, newy float32 = x, y
 	var sclMul float32
-	leftest -= *x
-	rightest -= *x
 	sclMul = s.gs.cam.action(&newx, &newy, leftest, rightest, lowest, highest,
 		cvmin, cvmax, s.super > 0 || s.pause > 0)
 
@@ -1204,7 +1213,7 @@ func (s *System) action(x, y, scl *float32) {
 					for i, p := range s.getPlayers() {
 						if p != nil {
 							s.playerClear(i, false)
-							p.selfState(0, -1, -1, 0, false)
+							p.selfState(0, -1, -1, 0, "")
 						}
 					}
 					ox := newx
@@ -1226,22 +1235,24 @@ func (s *System) action(x, y, scl *float32) {
 		}
 	}
 	if introSkip {
-		sclMul = 1 / *scl
+		sclMul = 1 / scl
 	}
 	leftest = (leftest - s.screenleft) * s.gs.cam.BaseScale()
 	rightest = (rightest + s.screenright) * s.gs.cam.BaseScale()
-	*scl = s.gs.cam.ScaleBound(*scl, sclMul)
-	tmp := (float32(s.gameWidth) / 2) / *scl
-	if AbsF((leftest+rightest)-(newx-*x)*2) >= tmp/2 {
-		tmp = MaxF(0, MinF(tmp, MaxF((newx-*x)-leftest, rightest-(newx-*x))))
+	scl = s.gs.cam.ScaleBound(scl, sclMul)
+	tmp := (float32(s.gameWidth) / 2) / scl
+	if AbsF((leftest+rightest)-(newx-x)*2) >= tmp/2 {
+		tmp = MaxF(0, MinF(tmp, MaxF((newx-x)-leftest, rightest-(newx-x))))
 	}
-	*x = s.gs.cam.XBound(*scl, MinF(*x+leftest+tmp, MaxF(*x+rightest-tmp, newx)))
+	x = s.gs.cam.XBound(scl, MinF(x+leftest+tmp, MaxF(x+rightest-tmp, newx)))
 	if !s.gs.cam.ZoomEnable {
 		// Pos X の誤差が出ないように精度を落とす
-		*x = float32(math.Ceil(float64(*x)*4-0.5) / 4)
+		x = float32(math.Ceil(float64(x)*4-0.5) / 4)
 	}
-	*y = s.gs.cam.YBound(*scl, newy)
-	s.gs.cam.Update(*scl, *x, *y)
+	y = s.gs.cam.YBound(scl, newy)
+	s.gs.cam.Update(scl, x, y)
+	// Reset active camera
+	s.gs.ac.x, s.gs.ac.y, s.gs.ac.scl = x, y, scl
 
 	if s.superanim != nil {
 		s.topSprites.add(&SprData{s.superanim, &s.superpmap, s.superpos,
@@ -1299,7 +1310,7 @@ func (s *System) action(x, y, scl *float32) {
 							if p.ss.no == 0 {
 								p.setCtrl(true)
 							} else {
-								p.selfState(0, -1, -1, 1, false)
+								p.selfState(0, -1, -1, 1, "")
 							}
 						}
 					}
@@ -1494,11 +1505,11 @@ func (s *System) action(x, y, scl *float32) {
 							if !p.scf(SCF_over) && !p.hitPause() && p.alive() && p.animNo != 5 {
 								p.setSCF(SCF_over)
 								if p.win() {
-									p.selfState(180, -1, -1, 1, false)
+									p.selfState(180, -1, -1, 1, "")
 								} else if p.lose() {
-									p.selfState(170, -1, -1, 1, false)
+									p.selfState(170, -1, -1, 1, "")
 								} else {
-									p.selfState(175, -1, -1, 1, false)
+									p.selfState(175, -1, -1, 1, "")
 								}
 							}
 						}
@@ -1941,7 +1952,7 @@ func (s *System) fight() (reload bool) {
 			} else if s.round == 1 || s.tmode[i&1] == TM_Turns {
 				/* If round 1 or a new character in turns mode, initialize values */
 				if p.ocd().life != -1 {
-					p.life = p.ocd().life
+					p.life = Clamp(p.ocd().life, 0, p.lifeMax)
 				} else {
 					p.life = p.lifeMax
 				}
@@ -1949,8 +1960,8 @@ func (s *System) fight() (reload bool) {
 					if s.maxPowerMode {
 						p.power = p.powerMax
 					} else if p.ocd().power != -1 {
-						p.power = p.ocd().power
-					} else {
+						p.power = Clamp(p.ocd().power, 0, p.powerMax)
+					} else if !sys.consecutiveRounds || sys.consecutiveWins[0] == 0 {
 						p.power = 0
 					}
 				}
@@ -1968,12 +1979,12 @@ func (s *System) fight() (reload bool) {
 			}
 
 			if p.ocd().guardPoints != -1 {
-				p.guardPoints = p.ocd().guardPoints
+				p.guardPoints = Clamp(p.ocd().guardPoints, 0, p.guardPointsMax)
 			} else {
 				p.guardPoints = p.guardPointsMax
 			}
 			if p.ocd().dizzyPoints != -1 {
-				p.dizzyPoints = p.ocd().dizzyPoints
+				p.dizzyPoints = Clamp(p.ocd().dizzyPoints, 0, p.dizzyPointsMax)
 			} else {
 				p.dizzyPoints = p.dizzyPointsMax
 			}
@@ -1984,7 +1995,7 @@ func (s *System) fight() (reload bool) {
 
 	//default bgm playback, used only in Quick VS or if externalized Lua implementaion is disabled
 	if s.round == 1 && (s.gameMode == "" || len(sys.commonLua) == 0) {
-		s.bgm.Open(s.stage.bgmusic, 1, int(s.stage.bgmvolume), int(s.stage.bgmloopstart), int(s.stage.bgmloopend))
+		s.bgm.Open(s.stage.bgmusic, 1, int(s.stage.bgmvolume), int(s.stage.bgmloopstart), int(s.stage.bgmloopend), 0)
 	}
 
 	oldWins, oldDraws := s.wins, s.draws
@@ -2025,7 +2036,7 @@ func (s *System) fight() (reload bool) {
 		s.roundResetFlg, s.introSkipped = false, false
 		s.reloadFlg, s.reloadStageFlg, s.reloadLifebarFlg = false, false, false
 		s.gs.ac.reset(&s.gs.cam)
-		s.gs.cam.Update(s.gs.ac.scl, s.gs.ac.x, s.gs.ac.y)
+		s.gs.cam.Update(s.gs.cam.startzoom, 0, 0)
 	}
 	reset()
 
@@ -2130,12 +2141,8 @@ func (s *System) fight() (reload bool) {
 			}
 		}
 
-		// If frame is ready to tick and not paused
-		if s.tickFrame() && (s.super <= 0 || !s.superpausebg) &&
-			(s.pause <= 0 || !s.pausebg) {
-			// Update stage
-			s.stage.action()
-		}
+		s.bgPalFX.step()
+		s.stage.action()
 
 		// Update game state
 		s.TickGameState(s.gs)
@@ -2159,7 +2166,7 @@ func (s *System) fight() (reload bool) {
 		// Render frame
 		if !s.frameSkip {
 			dac := s.gs.ac
-			if s.enableZoomstate {
+			if s.enableZoomtime > 0 {
 				if !s.debugPaused() {
 					s.zoomPosXLag += ((s.zoomPos[0] - s.zoomPosXLag) * (1 - s.zoomlag))
 					s.zoomPosYLag += ((s.zoomPos[1] - s.zoomPosYLag) * (1 - s.zoomlag))
@@ -2167,12 +2174,19 @@ func (s *System) fight() (reload bool) {
 				}
 				if s.zoomCameraBound {
 					dac.scl = MaxF(s.gs.cam.MinScale, s.drawScale/s.gs.cam.BaseScale())
-					dac.x = s.gs.cam.XBound(dac.scl, s.gs.ac.x+s.zoomPosXLag/s.gs.ac.scl)
+					if s.zoomCameraBound {
+						dac.x = s.gs.ac.x + ClampF(s.zoomPosXLag/s.gs.ac.scl,
+							-s.gs.cam.halfWidth/s.gs.ac.scl*2*(1-1/s.zoomScale),
+							s.gs.cam.halfWidth/s.gs.ac.scl*2*(1-1/s.zoomScale))
+					} else {
+						dac.x = s.gs.ac.x + s.zoomPosXLag/s.gs.ac.scl
+					}
+					dac.x = s.gs.cam.XBound(dac.scl, dac.x)
 				} else {
 					dac.scl = s.drawScale / s.gs.cam.BaseScale()
 					dac.x = s.gs.ac.x + s.zoomPosXLag/s.gs.ac.scl
 				}
-				dac.y = s.gs.ac.y + s.zoomPosYLag
+				dac.y = s.gs.ac.y + s.zoomPosYLag/s.gs.ac.scl
 			} else {
 				s.zoomlag = 0
 				s.zoomPosXLag = 0
@@ -2223,7 +2237,7 @@ func (s *System) TickGameState(gs *GameState) {
 	s.gs = gs
 
 	// Tick game state
-	s.action(&s.gs.ac.x, &s.gs.ac.y, &s.gs.ac.scl)
+	s.action()
 
 	// Restore game state
 	s.gs = storedGs

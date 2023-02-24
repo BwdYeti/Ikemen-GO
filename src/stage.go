@@ -60,8 +60,10 @@ const (
 	BT_Anim
 	BT_Visible
 	BT_Enable
+	BT_PalFX
 	BT_PosSet
 	BT_PosAdd
+	BT_RemapPal
 	BT_SinX
 	BT_SinY
 	BT_VelSet
@@ -99,6 +101,7 @@ func (bga *bgAction) action() {
 
 type backGround struct {
 	typ                int
+	palfx              *PalFX
 	anim               Animation
 	bga                bgAction
 	id                 int32
@@ -133,7 +136,7 @@ type backGround struct {
 }
 
 func newBackGround(sff *Sff) *backGround {
-	return &backGround{anim: *newAnimation(sff), delta: [...]float32{1, 1}, zoomdelta: [...]float32{1, math.MaxFloat32},
+	return &backGround{palfx: newPalFX(), anim: *newAnimation(sff), delta: [...]float32{1, 1}, zoomdelta: [...]float32{1, math.MaxFloat32},
 		xscale: [...]float32{1, 1}, rasterx: [...]float32{1, 1}, yscalestart: 100, scalestart: [...]float32{1, 1}, xbottomzoomdelta: math.MaxFloat32,
 		zoomscaledelta: [...]float32{math.MaxFloat32, math.MaxFloat32}, actionno: -1, visible: true, active: true, autoresizeparallax: false,
 		startrect: [...]int32{-32768, -32768, 65535, 65535}}
@@ -333,12 +336,14 @@ func readBackGround(is IniSection, link *backGround,
 	return bg
 }
 func (bg *backGround) reset() {
+	bg.palfx.clear()
 	bg.anim.Reset()
 	bg.bga.clear()
 	bg.bga.vel = bg.startv
 	bg.bga.radius = bg.startrad
 	bg.bga.sintime = bg.startsint
 	bg.bga.sinlooptime = bg.startsinlt
+	bg.palfx.time = -1
 }
 func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
 	stgscl [2]float32, shakeY float32, isStage bool) {
@@ -349,10 +354,18 @@ func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
 	}
 	xras := (bg.rasterx[1] - bg.rasterx[0]) / bg.rasterx[0]
 	xbs, dx := bg.xscale[1], MaxF(0, bg.delta[0]*bgscl)
-	sclx := MaxF(0, scl+(1-scl)*(1-dx))
-	scly := MaxF(0, scl+(1-scl)*(1-MaxF(0, bg.delta[1]*bgscl)))
-	var sclx_recip float32 = 1
+	var sclx_recip, sclx, scly float32 = 1, 1, 1
 	lscl := [...]float32{lclscl * stgscl[0], lclscl * stgscl[1]}
+	if bg.zoomdelta[0] != math.MaxFloat32 {
+		sclx = scl + (1-scl)*(1-bg.zoomdelta[0])
+		scly = scl + (1-scl)*(1-bg.zoomdelta[1])
+		if !bg.autoresizeparallax {
+			sclx_recip = (1 + bg.zoomdelta[0]*((1/(sclx*lscl[0])*lscl[0])-1))
+		}
+	} else {
+		sclx = MaxF(0, scl+(1-scl)*(1-dx))
+		scly = MaxF(0, scl+(1-scl)*(1-MaxF(0, bg.delta[1]*bgscl)))
+	}
 	if sclx != 0 && bg.autoresizeparallax {
 		tmp := 1 / sclx
 		if bg.xbottomzoomdelta != math.MaxFloat32 {
@@ -364,13 +377,6 @@ func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
 		xras -= tmp - 1
 		xbs *= tmp
 	}
-	if bg.zoomdelta[0] != math.MaxFloat32 {
-		sclx = scl + (1-scl)*(1-bg.zoomdelta[0])
-		scly = scl + (1-scl)*(1-bg.zoomdelta[1])
-		if !bg.autoresizeparallax {
-			sclx_recip = (1 + bg.zoomdelta[0]*((1/(sclx*lscl[0])*lscl[0])-1))
-		}
-	}
 	var xs3, ys3 float32 = 1, 1
 	if bg.zoomscaledelta[0] != math.MaxFloat32 {
 		xs3 = ((scl + (1-scl)*(1-bg.zoomscaledelta[0])) / sclx)
@@ -378,7 +384,6 @@ func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
 	if bg.zoomscaledelta[1] != math.MaxFloat32 {
 		ys3 = ((scl + (1-scl)*(1-bg.zoomscaledelta[1])) / scly)
 	}
-
 	scly *= lclscl
 	sclx *= lscl[0]
 	// This handles the flooring of the camera position in MUGEN versions earlier than 1.0.
@@ -389,9 +394,11 @@ func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
 	}
 	x := bg.start[0] + bg.xofs - (pos[0]/stgscl[0]+bg.camstartx)*bg.delta[0] +
 		bg.bga.offset[0]
-	y := bg.start[1] - ((pos[1]-sys.gs.cam.CameraZoomYBound*(1-bg.zoomdelta[1]))/stgscl[1])*bg.delta[1] + bg.bga.offset[1]
-	ys2 := bg.scaledelta[1] * pos[1] * bg.delta[1] * bgscl
-	ys := ((100-pos[1]*bg.yscaledelta)*bgscl/bg.yscalestart)*bg.scalestart[1] + ys2
+	yScrollPos := ((pos[1] - (sys.gs.cam.CameraZoomYBound / lclscl)) / stgscl[1]) * bg.delta[1] * bgscl
+	yScrollPos += ((sys.gs.cam.CameraZoomYBound / lclscl) / stgscl[1]) * Pow(bg.zoomdelta[1], 1.4) / bgscl
+	y := bg.start[1] - yScrollPos + bg.bga.offset[1]
+	ys2 := bg.scaledelta[1] * (pos[1] - sys.gs.cam.CameraZoomYBound) * bg.delta[1] * bgscl
+	ys := ((100-(pos[1]-sys.gs.cam.CameraZoomYBound)*bg.yscaledelta)*bgscl/bg.yscalestart)*bg.scalestart[1] + ys2
 	xs := bg.scaledelta[0] * pos[0] * bg.delta[0] * bgscl
 	x *= bgscl
 	y = y*bgscl + ((float32(sys.gameHeight)-shakeY)/scly-240)/stgscl[1]
@@ -419,7 +426,7 @@ func (bg backGround) draw(pos [2]float32, scl, bgscl, lclscl float32,
 	if rect[0] < sys.scrrect[2] && rect[1] < sys.scrrect[3] && rect[0]+rect[2] > 0 && rect[1]+rect[3] > 0 {
 		bg.anim.Draw(&rect, x, y, sclx, scly, bg.xscale[0]*bgscl*(bg.scalestart[0]+xs)*xs3, xbs*bgscl*(bg.scalestart[0]+xs)*xs3, ys*ys3,
 			xras*x/(AbsF(ys*ys3)*lscl[1]*float32(bg.anim.spr.Size[1])*bg.scalestart[1])*sclx_recip*bg.scalestart[1],
-			Rotation{}, float32(sys.gameWidth)/2, &sys.bgPalFX, true, 1, false, 1, 0, 0)
+			Rotation{}, float32(sys.gameWidth)/2, bg.palfx, true, 1, false, 1, 0, 0)
 	}
 }
 
@@ -432,6 +439,13 @@ type bgCtrl struct {
 	_type        BgcType
 	x, y         float32
 	v            [3]int32
+	src          [2]int32
+	dst          [2]int32
+	add          [3]int32
+	mul          [3]int32
+	sinadd       [4]int32
+	invall       bool
+	color        float32
 	positionlink bool
 	idx          int
 	sctrlid      int32
@@ -443,6 +457,8 @@ func newBgCtrl() *bgCtrl {
 func (bgc *bgCtrl) read(is IniSection, idx int) {
 	bgc.idx = idx
 	xy := false
+	srcdst := false
+	palfx := false
 	switch strings.ToLower(is["type"]) {
 	case "anim":
 		bgc._type = BT_Anim
@@ -452,12 +468,27 @@ func (bgc *bgCtrl) read(is IniSection, idx int) {
 		bgc._type = BT_Enable
 	case "null":
 		bgc._type = BT_Null
+	case "palfx":
+		bgc._type = BT_PalFX
+		palfx = true
+		// Default values for PalFX
+		bgc.add = [3]int32{0, 0, 0}
+		bgc.mul = [3]int32{256, 256, 256}
+		bgc.sinadd = [4]int32{0, 0, 0, 0}
+		bgc.invall = false
+		bgc.color = 1
 	case "posset":
 		bgc._type = BT_PosSet
 		xy = true
 	case "posadd":
 		bgc._type = BT_PosAdd
 		xy = true
+	case "remappal":
+		bgc._type = BT_RemapPal
+		srcdst = true
+		// Default values for RemapPal
+		bgc.src = [2]int32{-1, 0}
+		bgc.dst = [2]int32{-1, 0}
 	case "sinx":
 		bgc._type = BT_SinX
 	case "siny":
@@ -476,6 +507,26 @@ func (bgc *bgCtrl) read(is IniSection, idx int) {
 	if xy {
 		is.readF32ForStage("x", &bgc.x)
 		is.readF32ForStage("y", &bgc.y)
+	} else if srcdst {
+		is.readI32ForStage("source", &bgc.src[0], &bgc.src[1])
+		is.readI32ForStage("dest", &bgc.dst[0], &bgc.dst[1])
+	} else if palfx {
+		is.readI32ForStage("add", &bgc.add[0], &bgc.add[1], &bgc.add[2])
+		is.readI32ForStage("mul", &bgc.mul[0], &bgc.mul[1], &bgc.mul[2])
+		if is.readI32ForStage("sinadd", &bgc.sinadd[0], &bgc.sinadd[1], &bgc.sinadd[2], &bgc.sinadd[3]) {
+			if bgc.sinadd[3] < 0 {
+				for i := 0; i < 4; i++ {
+					bgc.sinadd[i] = -bgc.sinadd[i]
+				}
+			}
+		}
+		var tmp int32
+		if is.ReadI32("invertall", &tmp) {
+			bgc.invall = tmp != 0
+		}
+		if is.ReadF32("color", &bgc.color) {
+			bgc.color = bgc.color / 256
+		}
 	} else if is.ReadF32("value", &bgc.x) {
 		is.readI32ForStage("value", &bgc.v[0], &bgc.v[1], &bgc.v[2])
 	}
@@ -804,6 +855,30 @@ func loadStage(def string, main bool) (*Stage, error) {
 			sec[0].ReadI32("tensionhigh", &s.stageCamera.tensionhigh)
 		}
 	}
+	if sec := defmap["music"]; len(sec) > 0 {
+		s.bgmusic = sec[0]["bgmusic"]
+		sec[0].ReadI32("bgmvolume", &s.bgmvolume)
+		sec[0].ReadI32("bgmloopstart", &s.bgmloopstart)
+		sec[0].ReadI32("bgmloopend", &s.bgmloopend)
+		sec[0].ReadI32("bgmratio.life", &s.bgmratiolife)
+		sec[0].ReadI32("bgmtrigger.life", &s.bgmtriggerlife)
+		sec[0].ReadI32("bgmtrigger.alt", &s.bgmtriggeralt)
+	}
+	if sec := defmap["bgdef"]; len(sec) > 0 {
+		if sec[0].LoadFile("spr", []string{def, "", sys.motifDir, "data/"}, func(filename string) error {
+			sff, err := loadSff(filename, false)
+			if err != nil {
+				return err
+			}
+			*s.sff = *sff
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+		sec[0].ReadBool("debugbg", &s.debugbg)
+		sec[0].readI32ForStage("bgclearcolor", &s.bgclearcolor[0], &s.bgclearcolor[1], &s.bgclearcolor[2])
+		sec[0].ReadBool("roundpos", &s.stageprops.roundpos)
+	}
 	reflect := true
 	if sec := defmap["shadow"]; len(sec) > 0 {
 		var tmp int32
@@ -828,30 +903,6 @@ func loadStage(def string, main bool) (*Stage, error) {
 				s.reflection = Clamp(tmp, 0, 255)
 			}
 		}
-	}
-	if sec := defmap["music"]; len(sec) > 0 {
-		s.bgmusic = sec[0]["bgmusic"]
-		sec[0].ReadI32("bgmvolume", &s.bgmvolume)
-		sec[0].ReadI32("bgmloopstart", &s.bgmloopstart)
-		sec[0].ReadI32("bgmloopend", &s.bgmloopend)
-		sec[0].ReadI32("bgmratio.life", &s.bgmratiolife)
-		sec[0].ReadI32("bgmtrigger.life", &s.bgmtriggerlife)
-		sec[0].ReadI32("bgmtrigger.alt", &s.bgmtriggeralt)
-	}
-	if sec := defmap["bgdef"]; len(sec) > 0 {
-		if sec[0].LoadFile("spr", []string{def, "", sys.motifDir, "data/"}, func(filename string) error {
-			sff, err := loadSff(filename, false)
-			if err != nil {
-				return err
-			}
-			*s.sff = *sff
-			return nil
-		}); err != nil {
-			return nil, err
-		}
-		sec[0].ReadBool("debugbg", &s.debugbg)
-		sec[0].readI32ForStage("bgclearcolor", &s.bgclearcolor[0], &s.bgclearcolor[1], &s.bgclearcolor[2])
-		sec[0].ReadBool("roundpos", &s.stageprops.roundpos)
 	}
 	var bglink *backGround
 	for _, bgsec := range defmap["bg"] {
@@ -927,7 +978,12 @@ func loadStage(def string, main bool) (*Stage, error) {
 			MinF(float32(s.stageCamera.localcoord[1])*s.localscl*0.5*
 				(ratio1/ratio2-1), float32(Max(0, s.stageCamera.overdrawlow)))
 	}
-	s.stageCamera.drawOffsetY += MinF(float32(s.stageCamera.boundlow), MaxF(0, float32(s.stageCamera.floortension)*s.stageCamera.verticalfollow)) * s.localscl
+	if !s.stageCamera.ytensionenable {
+		s.stageCamera.drawOffsetY += MinF(float32(s.stageCamera.boundlow), MaxF(0, float32(s.stageCamera.floortension)*s.stageCamera.verticalfollow)) * s.localscl
+	} else {
+		s.stageCamera.drawOffsetY += MinF(float32(s.stageCamera.boundlow),
+			MaxF(0, (-26+(240/(float32(sys.gameWidth)/float32(s.stageCamera.localcoord[0])))-float32(s.stageCamera.tensionhigh)))) * s.localscl
+	}
 	//TODO: test if it works reasonably close to mugen
 	if sys.gameWidth > s.stageCamera.localcoord[0]*3*320/(s.stageCamera.localcoord[1]*4) {
 		if s.stageCamera.cutlow == math.MinInt32 {
@@ -1013,6 +1069,17 @@ func (s *Stage) runBgCtrl(bgc *bgCtrl) {
 		for i := range bgc.bg {
 			bgc.bg[i].visible, bgc.bg[i].active = bgc.v[0] != 0, bgc.v[0] != 0
 		}
+	case BT_PalFX:
+		for i := range bgc.bg {
+			bgc.bg[i].palfx.add = bgc.add
+			bgc.bg[i].palfx.mul = bgc.mul
+			bgc.bg[i].palfx.sinadd[0] = bgc.sinadd[0]
+			bgc.bg[i].palfx.sinadd[1] = bgc.sinadd[1]
+			bgc.bg[i].palfx.sinadd[2] = bgc.sinadd[2]
+			bgc.bg[i].palfx.cycletime = bgc.sinadd[3]
+			bgc.bg[i].palfx.invertall = bgc.invall
+			bgc.bg[i].palfx.color = bgc.color
+		}
 	case BT_PosSet:
 		for i := range bgc.bg {
 			if bgc.xEnable() {
@@ -1046,6 +1113,26 @@ func (s *Stage) runBgCtrl(bgc *bgCtrl) {
 			if bgc.yEnable() {
 				s.bga.pos[1] += bgc.y
 			}
+		}
+	case BT_RemapPal:
+		if bgc.src[0] >= 0 && bgc.src[1] >= 0 && bgc.dst[1] >= 0 {
+			// Get source pal
+			si, ok := s.sff.palList.PalTable[[...]int16{int16(bgc.src[0]), int16(bgc.src[1])}]
+			if !ok || si < 0 {
+				return
+			}
+			var di int
+			if bgc.dst[0] < 0 {
+				// Set dest pal to source pal (remap gets reset)
+				di = si
+			} else {
+				// Get dest pal
+				di, ok = s.sff.palList.PalTable[[...]int16{int16(bgc.dst[0]), int16(bgc.dst[1])}]
+				if !ok || di < 0 {
+					return
+				}
+			}
+			s.sff.palList.Remap(si, di)
 		}
 	case BT_SinX, BT_SinY:
 		ii := Btoi(bgc._type == BT_SinY)
@@ -1104,12 +1191,35 @@ func (s *Stage) runBgCtrl(bgc *bgCtrl) {
 	}
 }
 func (s *Stage) action() {
-	s.stageTime++
-	s.bgct.step(s)
-	s.bga.action()
-	link, zlink := 0, -1
+	link, zlink, paused := 0, -1, true
+	if sys.tickFrame() && (sys.super <= 0 || !sys.superpausebg) &&
+		(sys.pause <= 0 || !sys.pausebg) {
+		paused = false
+		s.stageTime++
+		s.bgct.step(s)
+		s.bga.action()
+	}
 	for i, b := range s.bg {
-		if b.active {
+		b.palfx.step()
+		if sys.bgPalFX.enable {
+			// TODO: Finish proper synthesization of bgPalFX into PalFX from bg element
+			// (Right now, bgPalFX just overrides all unique parameters from BG Elements' PalFX)
+			// for j := 0; j < 3; j++ {
+			// if sys.bgPalFX.invertall {
+			// b.palfx.eAdd[j] = -b.palfx.add[j] * (b.palfx.mul[j]/256) + 256 * (1-(b.palfx.mul[j]/256))
+			// b.palfx.eMul[j] = 256
+			// }
+			// b.palfx.eAdd[j] = int32((float32(b.palfx.eAdd[j])) * sys.bgPalFX.eColor)
+			// b.palfx.eMul[j] = int32(float32(b.palfx.eMul[j]) * sys.bgPalFX.eColor + 256*(1-sys.bgPalFX.eColor))
+			// }
+			// b.palfx.synthesize(sys.bgPalFX)
+			b.palfx.eAdd = sys.bgPalFX.eAdd
+			b.palfx.eMul = sys.bgPalFX.eMul
+			b.palfx.eColor = sys.bgPalFX.eColor
+			b.palfx.eInvertall = sys.bgPalFX.eInvertall
+			b.palfx.eNegType = sys.bgPalFX.eNegType
+		}
+		if b.active && !paused {
 			s.bg[i].bga.action()
 			if i > 0 && b.positionlink {
 				s.bg[i].bga.offset[0] += s.bg[link].bga.sinoffset[0]
@@ -1130,11 +1240,15 @@ func (s *Stage) draw(top bool, x, y, scl float32) {
 	if s.hires {
 		bgscl = 0.5
 	}
+	if s.stageCamera.boundhigh > 0 {
+		y += float32(s.stageCamera.boundhigh)
+	}
 	yofs, pos := sys.envShake.getOffset(), [...]float32{x, y}
 	scl2 := s.localscl * scl
-	if pos[1] <= float32(s.stageCamera.boundlow) && pos[1] < float32(s.stageCamera.boundhigh) {
-		yofs += (pos[1] - float32(s.stageCamera.boundhigh)) * scl2
-		pos[1] = float32(s.stageCamera.boundhigh)
+	if pos[1] <= float32(s.stageCamera.boundlow) && pos[1] < float32(s.stageCamera.boundhigh)-sys.gs.cam.ExtraBoundH {
+		yofs += (pos[1]-float32(s.stageCamera.boundhigh))*scl2 +
+			sys.gs.cam.ExtraBoundH*scl
+		pos[1] = float32(s.stageCamera.boundhigh) - sys.gs.cam.ExtraBoundH/s.localscl
 	}
 	if s.stageCamera.verticalfollow > 0 {
 		if yofs < 0 {
@@ -1177,6 +1291,7 @@ func (s *Stage) draw(top bool, x, y, scl float32) {
 	}
 }
 func (s *Stage) reset() {
+	s.sff.palList.ResetRemap()
 	s.bga.clear()
 	for i := range s.bg {
 		s.bg[i].reset()
@@ -1191,7 +1306,8 @@ func (s *Stage) reset() {
 	s.stageTime = 0
 }
 
-func (s *Stage) modifyBGCtrl(id int32, t, v [3]int32, x, y float32) {
+func (s *Stage) modifyBGCtrl(id int32, t, v [3]int32, x, y float32, src, dst [2]int32,
+	add, mul [3]int32, sinadd [4]int32, invall int32, color float32) {
 	for i := range s.bgc {
 		if id == s.bgc[i].sctrlid {
 			if t[0] != IErr {
@@ -1203,20 +1319,48 @@ func (s *Stage) modifyBGCtrl(id int32, t, v [3]int32, x, y float32) {
 			if t[2] != IErr {
 				s.bgc[i].looptime = t[2]
 			}
-			if v[0] != IErr {
-				s.bgc[i].v[0] = v[0]
-			}
-			if v[1] != IErr {
-				s.bgc[i].v[1] = v[1]
-			}
-			if v[2] != IErr {
-				s.bgc[i].v[2] = v[2]
+			for j := 0; j < 3; j++ {
+				if v[j] != IErr {
+					s.bgc[i].v[j] = v[j]
+				}
 			}
 			if !math.IsNaN(float64(x)) {
 				s.bgc[i].x = x
 			}
 			if !math.IsNaN(float64(y)) {
 				s.bgc[i].y = y
+			}
+			for j := 0; j < 2; j++ {
+				if src[j] != IErr {
+					s.bgc[i].src[j] = src[j]
+				}
+				if dst[j] != IErr {
+					s.bgc[i].dst[j] = dst[j]
+				}
+			}
+			var side int32 = 1
+			if sinadd[3] != IErr {
+				if sinadd[3] < 0 {
+					sinadd[3] = -sinadd[3]
+					side = -1
+				}
+			}
+			for j := 0; j < 3; j++ {
+				if add[j] != IErr {
+					s.bgc[i].add[j] = add[j]
+				}
+				if mul[j] != IErr {
+					s.bgc[i].mul[j] = mul[j]
+				}
+				if sinadd[j] != IErr {
+					s.bgc[i].sinadd[j] = sinadd[j] * side
+				}
+			}
+			if invall != IErr {
+				s.bgc[i].invall = invall != 0
+			}
+			if !math.IsNaN(float64(color)) {
+				s.bgc[i].color = color / 256
 			}
 			s.reload = true
 		}

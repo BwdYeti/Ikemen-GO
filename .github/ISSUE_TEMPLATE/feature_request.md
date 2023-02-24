@@ -1,17 +1,11 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: ''
+name: 🚀 Feature request
+about: This issue tracker is not for feature requests. Please suggest your idea using GitHub Discussions.
+title: Wrong section
 labels: ''
 assignees: ''
-
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+Please open feature requests using GitHub Discussions at https://github.com/ikemen-engine/Ikemen-GO/discussions
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
-
-**Additional context**
-Add any other context or screenshots about the feature request here.
+The main issue tracker is reserved for bug reports and compatibility issues.

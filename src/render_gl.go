@@ -12,6 +12,24 @@ import (
 	"golang.org/x/mobile/exp/f32"
 )
 
+var InternalFormatLUT = map[int32]gl.Enum {
+	8: gl.LUMINANCE,
+	24: gl.RGB,
+	32: gl.RGBA,
+}
+
+var BlendEquationLUT = map[BlendEquation]gl.Enum {
+	BlendAdd: gl.FUNC_ADD,
+	BlendReverseSubtract: gl.FUNC_REVERSE_SUBTRACT,
+}
+
+var BlendFunctionLUT = map[BlendFunc]gl.Enum {
+	BlendOne: gl.ONE,
+	BlendZero: gl.ZERO,
+	BlendSrcAlpha: gl.SRC_ALPHA,
+	BlendOneMinusSrcAlpha: gl.ONE_MINUS_SRC_ALPHA,
+}
+
 // ------------------------------------------------------------------
 // ShaderProgram
 
@@ -41,8 +59,6 @@ func newShaderProgram(vert, frag, id string) (s *ShaderProgram) {
 
 	s.u = make(map[string]gl.Uniform)
 	s.t = make(map[string]int)
-	s.RegisterUniforms("modelview", "projection", "alpha")
-	s.RegisterTextures("tex")
 	return
 }
 
@@ -57,67 +73,6 @@ func (s *ShaderProgram) RegisterTextures(names ...string) {
 		s.u[name] = gl.GetUniformLocation(s.program, name)
 		s.t[name] = len(s.t)
 	}
-}
-
-func (s *ShaderProgram) UseProgram() {
-	gl.UseProgram(s.program)
-}
-
-func (s *ShaderProgram) EnableAttribs() {
-	// Must bind buffer before enabling attributes
-	gl.BindBuffer(gl.ARRAY_BUFFER, renderer.vertexBuffer)
-
-	gl.EnableVertexAttribArray(s.aPos)
-	gl.VertexAttribPointer(s.aPos, 2, gl.FLOAT, false, 16, 0)
-	gl.EnableVertexAttribArray(s.aUv)
-	gl.VertexAttribPointer(s.aUv, 2, gl.FLOAT, false, 16, 8)
-}
-
-func (s *ShaderProgram) DisableAttribs() {
-	gl.DisableVertexAttribArray(s.aPos)
-	gl.DisableVertexAttribArray(s.aUv)
-}
-
-func (s *ShaderProgram) UniformI(name string, val int) {
-	loc := s.u[name]
-	gl.Uniform1i(loc, val)
-}
-
-func (s *ShaderProgram) UniformF(name string, values ...float32) {
-	loc := s.u[name]
-	switch len(values) {
-	case 1: gl.Uniform1f(loc, values[0])
-	case 2: gl.Uniform2f(loc, values[0], values[1])
-	case 3: gl.Uniform3f(loc, values[0], values[1], values[2])
-	case 4: gl.Uniform4f(loc, values[0], values[1], values[2], values[3])
-	}
-}
-
-func (s *ShaderProgram) UniformFv(name string, values []float32) {
-	loc := s.u[name]
-	switch len(values) {
-	case 2: gl.Uniform2fv(loc, values)
-	case 3: gl.Uniform3fv(loc, values)
-	case 4: gl.Uniform4fv(loc, values)
-	}
-}
-
-func (s *ShaderProgram) UniformMatrix(name string, value []float32) {
-	loc := s.u[name]
-	gl.UniformMatrix4fv(loc, value)
-}
-
-func (s *ShaderProgram) UniformTexture(name string, t *Texture) {
-	loc, unit := s.u[name], s.t[name]
-	gl.ActiveTexture((gl.Enum(int(gl.TEXTURE0) + unit)))
-	gl.BindTexture(gl.TEXTURE_2D, t.handle)
-	gl.Uniform1i(loc, unit)
-}
-
-func (s *ShaderProgram) SetVertexData(values ...float32) {
-	data := f32.Bytes(binary.LittleEndian, values...)
-	gl.BindBuffer(gl.ARRAY_BUFFER, renderer.vertexBuffer)
-	gl.BufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW)
 }
 
 func compileShader(shaderType gl.Enum, src string) (shader gl.Shader) {
@@ -157,12 +112,13 @@ type Texture struct {
 	width  int32
 	height int32
 	depth  int32
+	filter bool
 	handle gl.Texture
 }
 
 // Generate a new texture name
-func newTexture(width, height, depth int32) (t *Texture) {
-	t = &Texture{width, height, depth, gl.CreateTexture()}
+func newTexture(width, height, depth int32, filter bool) (t *Texture) {
+	t = &Texture{width, height, depth, filter, gl.CreateTexture()}
 	runtime.SetFinalizer(t, func (t *Texture) {
 		sys.mainThreadTask <- func() {
 			gl.DeleteTexture(t.handle)
@@ -172,18 +128,13 @@ func newTexture(width, height, depth int32) (t *Texture) {
 }
 
 // Bind a texture and upload texel data to it
-func (t *Texture) SetData(data []byte, filter bool) {
+func (t *Texture) SetData(data []byte) {
 	var interp int = gl.NEAREST
-	if filter {
+	if t.filter {
 		interp = gl.LINEAR
 	}
 
-	var format gl.Enum = gl.LUMINANCE
-	if t.depth == 24 {
-		format = gl.RGB
-	} else if t.depth == 32 {
-		format = gl.RGBA
-	}
+	format := InternalFormatLUT[Max(t.depth, 8)]
 
 	gl.BindTexture(gl.TEXTURE_2D, t.handle)
 	gl.PixelStorei(gl.UNPACK_ALIGNMENT, 1)
@@ -213,9 +164,16 @@ type Renderer struct {
 	// Post-processing shaders
 	postVertBuffer gl.Buffer
 	postShaderSelect []*ShaderProgram
-	// Vertex data for primitive rendering
+	// Shader and vertex data for primitive rendering
+	spriteShader *ShaderProgram
 	vertexBuffer gl.Buffer
 }
+
+//go:embed shaders/sprite.vert.glsl
+var vertShader string
+
+//go:embed shaders/sprite.frag.glsl
+var fragShader string
 
 //go:embed shaders/ident.vert.glsl
 var identVertShader string
@@ -223,11 +181,12 @@ var identVertShader string
 //go:embed shaders/ident.frag.glsl
 var identFragShader string
 
-func newRenderer() (r *Renderer) {
+// Render initialization.
+// Creates the default shaders, the framebuffer and enables MSAA.
+func (r *Renderer) Init() {
 	sys.errLog.Printf("Using OpenGL %v (%v)",
 		gl.GetString(gl.VERSION), gl.GetString(gl.RENDERER))
 
-	r = &Renderer{}
 	r.postShaderSelect = make([]*ShaderProgram, 1+len(sys.externalShaderList))
 
 	// Data buffers for rendering
@@ -237,6 +196,12 @@ func newRenderer() (r *Renderer) {
 	gl.BufferData(gl.ARRAY_BUFFER, postVertData, gl.STATIC_DRAW)
 
 	r.vertexBuffer = gl.CreateBuffer()
+
+	// Sprite shader
+	r.spriteShader = newShaderProgram(vertShader, fragShader, "Main Shader")
+	r.spriteShader.RegisterUniforms("modelview", "projection", "x1x2x4x3",
+		"alpha", "tint", "mask", "neg", "gray", "add", "mult", "isFlat", "isRgba", "isTrapez")
+	r.spriteShader.RegisterTextures("pal", "tex")
 
 	// Compile postprocessing shaders
 
@@ -281,8 +246,8 @@ func newRenderer() (r *Renderer) {
 	gl.BindTexture(gl.TEXTURE_2D, gl.NoTexture)
 
 	if sys.multisampleAntialiasing {
-		r.fbo_f_texture = newTexture(sys.scrrect[2], sys.scrrect[3], 32)
-		r.fbo_f_texture.SetData(nil, false)
+		r.fbo_f_texture = newTexture(sys.scrrect[2], sys.scrrect[3], 32, false)
+		r.fbo_f_texture.SetData(nil)
 	} else {
 		r.rbo_depth = gl.CreateRenderbuffer()
 		gl.BindRenderbuffer(gl.RENDERBUFFER, r.rbo_depth)
@@ -309,16 +274,17 @@ func newRenderer() (r *Renderer) {
 	}
 
 	gl.BindFramebuffer(gl.FRAMEBUFFER, gl.NoFramebuffer)
-
-	return
 }
 
-func (r *Renderer) IsOpenGL() bool {
-	return true
+func (r *Renderer) Close() {
 }
 
-func (r *Renderer) BeginFrame() {
+func (r *Renderer) BeginFrame(clear bool) {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, r.fbo)
+	gl.Viewport(0, 0, int(sys.scrrect[2]), int(sys.scrrect[3]))
+	if clear {
+		gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+	}
 }
 
 func (r *Renderer) EndFrame() {
@@ -333,7 +299,8 @@ func (r *Renderer) EndFrame() {
 	postShader := r.postShaderSelect[sys.postProcessingShader]
 
 	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-	postShader.UseProgram()
+	gl.UseProgram(postShader.program)
+	gl.Disable(gl.BLEND)
 
 	gl.ActiveTexture(gl.TEXTURE0)
 	if sys.multisampleAntialiasing {
@@ -341,8 +308,8 @@ func (r *Renderer) EndFrame() {
 	} else {
 		gl.BindTexture(gl.TEXTURE_2D, r.fbo_texture)
 	}
-	postShader.UniformI("Texture", 0)
-	postShader.UniformF("TextureSize", float32(sys.scrrect[2]), float32(sys.scrrect[3]))
+	gl.Uniform1i(postShader.u["Texture"], 0)
+	gl.Uniform2f(postShader.u["TextureSize"], float32(sys.scrrect[2]), float32(sys.scrrect[3]))
 
 	gl.BindBuffer(gl.ARRAY_BUFFER, r.postVertBuffer)
 	gl.EnableVertexAttribArray(postShader.aVert)
@@ -351,6 +318,85 @@ func (r *Renderer) EndFrame() {
 	gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
 	gl.DisableVertexAttribArray(postShader.aVert)
+}
+
+func (r *Renderer) SetPipeline (eq BlendEquation, src, dst BlendFunc) {
+	gl.UseProgram(r.spriteShader.program)
+
+	gl.BlendEquation(BlendEquationLUT[eq])
+	gl.BlendFunc(BlendFunctionLUT[src], BlendFunctionLUT[dst])
+	gl.Enable(gl.BLEND)
+
+	// Must bind buffer before enabling attributes
+	gl.BindBuffer(gl.ARRAY_BUFFER, r.vertexBuffer)
+
+	gl.EnableVertexAttribArray(r.spriteShader.aPos)
+	gl.VertexAttribPointer(r.spriteShader.aPos, 2, gl.FLOAT, false, 16, 0)
+	gl.EnableVertexAttribArray(r.spriteShader.aUv)
+	gl.VertexAttribPointer(r.spriteShader.aUv, 2, gl.FLOAT, false, 16, 8)
+}
+
+func (r *Renderer) ReleasePipeline() {
+	gl.DisableVertexAttribArray(r.spriteShader.aPos)
+	gl.DisableVertexAttribArray(r.spriteShader.aUv)
+	gl.Disable(gl.BLEND)
+}
+
+func (r *Renderer) ReadPixels(data[]uint8, width, height int) {
+	r.EndFrame()
+	gl.ReadPixels(data, 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE)
+	r.BeginFrame(false)
+}
+
+func (r *Renderer) Scissor(x, y, width, height int32) {
+	gl.Enable(gl.SCISSOR_TEST)
+	gl.Scissor(x, sys.scrrect[3] - (y + height), width, height)
+}
+
+func (r *Renderer) DisableScissor() {
+	gl.Disable(gl.SCISSOR_TEST)
+}
+
+func (r *Renderer) SetUniformI(name string, val int) {
+	loc := r.spriteShader.u[name]
+	gl.Uniform1i(loc, val)
+}
+
+func (r *Renderer) SetUniformF(name string, values ...float32) {
+	loc := r.spriteShader.u[name]
+	switch len(values) {
+	case 1: gl.Uniform1f(loc, values[0])
+	case 2: gl.Uniform2f(loc, values[0], values[1])
+	case 3: gl.Uniform3f(loc, values[0], values[1], values[2])
+	case 4: gl.Uniform4f(loc, values[0], values[1], values[2], values[3])
+	}
+}
+
+func (r *Renderer) SetUniformFv(name string, values []float32) {
+	loc := r.spriteShader.u[name]
+	switch len(values) {
+	case 2: gl.Uniform2fv(loc, values)
+	case 3: gl.Uniform3fv(loc, values)
+	case 4: gl.Uniform4fv(loc, values)
+	}
+}
+
+func (r *Renderer) SetUniformMatrix(name string, value []float32) {
+	loc := r.spriteShader.u[name]
+	gl.UniformMatrix4fv(loc, value)
+}
+
+func (r *Renderer) SetTexture(name string, t *Texture) {
+	loc, unit := r.spriteShader.u[name], r.spriteShader.t[name]
+	gl.ActiveTexture((gl.Enum(int(gl.TEXTURE0) + unit)))
+	gl.BindTexture(gl.TEXTURE_2D, t.handle)
+	gl.Uniform1i(loc, unit)
+}
+
+func (r *Renderer) SetVertexData(values ...float32) {
+	data := f32.Bytes(binary.LittleEndian, values...)
+	gl.BindBuffer(gl.ARRAY_BUFFER, r.vertexBuffer)
+	gl.BufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW)
 }
 
 func (r *Renderer) RenderQuad() {

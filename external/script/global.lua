@@ -161,7 +161,7 @@ end
 function stateInfo()
 	return string.format(
 		'State No: %d (P%d); CTRL: %s; Type: %s; MoveType: %s; Physics: %s; Time: %d',
-		stateno(), stateowner(), boolToInt(ctrl()), statetype(), movetype(), physics(), time()-1
+		stateno(), stateownerplayerno(), boolToInt(ctrl()), statetype(), movetype(), physics(), time()-1
 	)
 end
 
@@ -257,10 +257,10 @@ function loop()
 				menu.f_init()
 			end
 		--demo mode
-		elseif gamemode('demo') and ((motif.attract_mode.enabled == 1 and main.credits > 0 and not sndPlaying(motif.files.snd_data, motif.attract_mode.credits_snd[1], motif.attract_mode.credits_snd[2])) or (motif.attract_mode.enabled == 0 and main.f_input(main.t_players, {'pal'})) or gametime() >= motif.demo_mode.fight_endtime) then
+		elseif gamemode('demo') and ((motif.attract_mode.enabled == 1 and main.credits > 0 and not sndPlaying(motif.files.snd_data, motif.attract_mode.credits_snd[1], motif.attract_mode.credits_snd[2])) or (motif.attract_mode.enabled == 0 and main.f_input(main.t_players, {'pal'})) or fighttime() >= motif.demo_mode.fight_endtime) then
 			endMatch()
 		--challenger
-		elseif gamemode('arcade') then
+		elseif motif.challenger_info.enabled ~= 0 and gamemode('arcade') then
 			if start.challenger > 0 then
 				start.f_challenger()
 			else

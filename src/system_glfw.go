@@ -7,6 +7,7 @@ import (
 	"image"
 
 	glfw "github.com/fyne-io/glfw-js"
+	gl "github.com/fyne-io/gl-js"
 )
 
 type Window struct {
@@ -20,6 +21,9 @@ func (s *System) newWindow(w, h int) (*Window, error) {
 	var err error
 	var window *glfw.Window
 	var monitor *glfw.Monitor
+
+	// Initialize OpenGL
+	chk(glfw.Init(gl.ContextWatcher))
 
 	if monitor = glfw.GetPrimaryMonitor(); monitor == nil {
 		return nil, fmt.Errorf("failed to obtain primary monitor")
@@ -84,6 +88,10 @@ func (w *Window) SetIcon(icon []image.Image) {
 	w.Window.SetIcon(icon)
 }
 
+func (w *Window) SetSwapInterval(interval int) {
+	glfw.SwapInterval(interval)
+}
+
 func (w *Window) GetSize() (int, int) {
 	return w.Window.GetSize()
 }
@@ -122,4 +130,21 @@ func (w *Window) pollEvents() {
 
 func (w *Window) shouldClose() bool {
 	return w.Window.ShouldClose()
+}
+
+func (w *Window) Close() {
+	glfw.Terminate()
+}
+
+func keyCallback(_ *glfw.Window, key Key, _ int, action glfw.Action, mk ModifierKey) {
+	switch action {
+	case glfw.Release:
+		OnKeyReleased(key, mk)
+	case glfw.Press:
+		OnKeyPressed(key, mk)
+	}
+}
+
+func charCallback(_ *glfw.Window, char rune, mk ModifierKey) {
+	OnTextEntered(string(char))
 }

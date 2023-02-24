@@ -45,6 +45,7 @@ type Camera struct {
 	XMin, XMax                      float32
 	Scale, MinScale                 float32
 	boundL, boundR, boundH, boundLo float32
+	ExtraBoundH                     float32
 	zoff                            float32
 	screenZoff                      float32
 	halfWidth                       float32
@@ -61,11 +62,10 @@ func (c *Camera) Init() {
 	c.halfWidth = float32(sys.gameWidth) / 2
 	c.XMin = c.boundL - c.halfWidth/c.BaseScale()
 	c.XMax = c.boundR + c.halfWidth/c.BaseScale()
-	c.boundH = MinF(0, float32(c.boundhigh-c.localcoord[1])*c.localscl+float32(sys.gameHeight)-c.drawOffsetY)
+	c.ExtraBoundH = ((1 - c.zoomout) * 100) * (1 / c.zoomout) * 2.1 * (float32(sys.gameHeight) / 240)
+	c.boundH = MinF(0, float32(c.boundhigh-c.localcoord[1])*c.localscl+float32(sys.gameHeight)-c.drawOffsetY) - c.ExtraBoundH
 	c.boundLo = MaxF(0, float32(c.boundlow)*c.localscl-c.drawOffsetY)
-	if c.boundhigh > 0 {
-		c.boundH += float32(c.boundhigh) * c.localscl
-	}
+
 	//if c.boundlow < 0 {
 	//	c.boundLo += float32(c.boundlow) * c.localscl
 	//}
@@ -74,13 +74,16 @@ func (c *Camera) Init() {
 	yminscl := float32(sys.gameHeight) / (240 - MinF(0, c.boundH))
 	c.MinScale = MaxF(c.zoomout, MinF(c.zoomin, MaxF(xminscl, yminscl)))
 	c.screenZoff = float32(c.zoffset-c.localcoord[1])*c.localscl + 240 - c.drawOffsetY
+	if c.boundhigh > 0 {
+		c.boundH += float32(c.boundhigh) * c.localscl
+		c.screenZoff -= float32(c.boundhigh) * c.localscl
+	}
 }
 func (c *Camera) Update(scl, x, y float32) {
 	c.Scale = c.BaseScale() * scl
 	c.zoff = (c.screenZoff-240)*scl + float32(sys.gameHeight)
 	for i := 0; i < 2; i++ {
-		c.Offset[i] = sys.stage.bga.offset[i] * sys.stage.localscl *
-			sys.stage.scale[i] * scl
+		c.Offset[i] = sys.stage.bga.offset[i] * sys.stage.localscl * scl
 	}
 	c.ScreenPos[0] = x - c.halfWidth/c.Scale - c.Offset[0]
 	c.ScreenPos[1] = y - (c.GroundLevel()-float32(sys.gameHeight-240)*scl)/
@@ -159,12 +162,12 @@ func (c *Camera) action(x, y *float32, leftest, rightest, lowest, highest,
 		}
 	}
 	*x += vx
-	ftension, vfollow := float32(c.floortension)-c.drawOffsetY, c.verticalfollow
+	ftension, vfollow, ftensionlow := float32(c.floortension)*c.localscl-c.drawOffsetY, c.verticalfollow, -c.drawOffsetY
 	if c.ytensionenable {
-		ftension = (240/(float32(sys.gameWidth)/float32(c.localcoord[0])) - float32(c.tensionhigh)) * c.localscl
+		heightValue := (240 / (float32(sys.gameWidth) / float32(c.localcoord[0])))
+		ftension = (heightValue/c.Scale - float32(c.tensionhigh) - float32(c.drawOffsetY) - (heightValue - float32(c.zoffset))) * c.localscl
 		vfollow = 1
 	}
-	ftension *= c.localscl
 	if ftension < 0 {
 		ftension += 240*2 - float32(c.localcoord[1])*c.localscl - 240*c.Scale
 		if ftension < 0 {
@@ -172,10 +175,10 @@ func (c *Camera) action(x, y *float32, leftest, rightest, lowest, highest,
 		}
 	}
 	if highest < -ftension {
-		*y = (highest + ftension) * Pow(vfollow,
+		*y = (highest + ftension + MaxF(0, lowest+ftensionlow)) * Pow(vfollow,
 			MinF(1, 1/Pow(c.Scale, 4)))
-	} else if lowest > 0 {
-		*y = lowest * Pow(vfollow,
+	} else if lowest > -ftensionlow {
+		*y = (lowest + ftensionlow) * Pow(vfollow,
 			MinF(1, 1/Pow(c.Scale, 4)))
 	} else {
 		*y = c.Pos[1] - c.CameraZoomYBound
@@ -186,7 +189,7 @@ func (c *Camera) action(x, y *float32, leftest, rightest, lowest, highest,
 		tmp = 0
 	}
 	tmp = MaxF(220/c.Scale, float32(math.Sqrt(float64(Pow(tmp, 2)+
-		Pow(lowest-highest, 2)))))
+		Pow(lowest+float32(c.tensionlow)*c.localscl+67-highest, 2)))))
 	sclMul = tmp * c.Scale / MaxF(c.Scale, (400-80*MaxF(1, c.Scale))*
 		Pow(2, c.ZoomSpeed-2))
 	if sclMul >= 3/Pow(2, c.ZoomSpeed) {

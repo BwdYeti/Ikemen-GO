@@ -9,9 +9,8 @@ import (
 	"io"
 	"math"
 	"os"
+	"runtime"
 	"unsafe"
-
-	gl "github.com/fyne-io/gl-js"
 )
 
 type TransType int32
@@ -151,7 +150,7 @@ func (pf *PalFX) getFcPalFx(transNeg bool) (neg bool, grayscale float32,
 	for i, v := range p.eAdd {
 		add[i] = float32(v) / 255
 		if transNeg {
-			add[i] *= -1
+			//add[i] *= -1
 			mul[i] = float32(p.eMul[(i+1)%3]+p.eMul[(i+2)%3]) / 512
 		} else {
 			mul[i] = float32(p.eMul[i]) / 256
@@ -180,11 +179,13 @@ func (pf *PalFX) step() {
 		pf.eInvertall = pf.invertall
 		pf.eNegType = pf.negType
 		pf.sinAdd(&pf.eAdd)
-		if pf.cycletime > 0 {
-			pf.sintime = (pf.sintime + 1) % pf.cycletime
-		}
-		if pf.time > 0 {
-			pf.time--
+		if sys.tickFrame() {
+			if pf.cycletime > 0 {
+				pf.sintime = (pf.sintime + 1) % pf.cycletime
+			}
+			if pf.time > 0 {
+				pf.time--
+			}
 		}
 	}
 }
@@ -277,8 +278,8 @@ func (pl *PaletteList) SwapPalMap(palMap *[]int) bool {
 }
 
 func PaletteToTexture(pal []uint32) *Texture {
-	tx := newTexture(256, 1, 32)
-	tx.SetData(unsafe.Slice((*byte)(unsafe.Pointer(&pal[0])), len(pal) * 4), false)
+	tx := newTexture(256, 1, 32, false)
+	tx.SetData(unsafe.Slice((*byte)(unsafe.Pointer(&pal[0])), len(pal)*4))
 	return tx
 }
 
@@ -380,130 +381,132 @@ func newSprite() *Sprite {
 	return &Sprite{palidx: -1}
 }
 
-/*func loadFromSff(filename string, g, n int16) (*Sprite, error) {
-	s := newSprite()
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { chk(f.Close()) }()
-	h := &SffHeader{}
-	var lofs, tofs uint32
-	if err := h.Read(f, &lofs, &tofs); err != nil {
-		return nil, err
-	}
-	var shofs, xofs, size uint32 = h.FirstSpriteHeaderOffset, 0, 0
-	var indexOfPrevious uint16
-	pl := &PaletteList{}
-	pl.init()
-	foo := func() error {
-		switch h.Ver0 {
-		case 1:
-			if err := s.readHeader(f, &xofs, &size, &indexOfPrevious); err != nil {
-				return err
-			}
-		case 2:
-			if err := s.readHeaderV2(f, &xofs, &size,
-				lofs, tofs, &indexOfPrevious); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	var dummy *Sprite
-	var newSubHeaderOffset []uint32
-	newSubHeaderOffset = append(newSubHeaderOffset, shofs)
-	i := 0
-	for ; i < int(h.NumberOfSprites); i++ {
-		newSubHeaderOffset = append(newSubHeaderOffset, shofs)
-		f.Seek(int64(shofs), 0)
-		if err := foo(); err != nil {
+/*
+	func loadFromSff(filename string, g, n int16) (*Sprite, error) {
+		s := newSprite()
+		f, err := os.Open(filename)
+		if err != nil {
 			return nil, err
 		}
-		if s.palidx < 0 || s.Group == g && s.Number == n {
-			ip := len(newSubHeaderOffset)
-			for size == 0 {
-				if int(indexOfPrevious) >= ip {
-					return nil, Error("link is invalid")
-				}
-				ip = int(indexOfPrevious)
-				if h.Ver0 == 1 {
-					shofs = newSubHeaderOffset[ip]
-				} else {
-					shofs = h.FirstSpriteHeaderOffset + uint32(ip)*28
-				}
-				f.Seek(int64(shofs), 0)
-				if err := foo(); err != nil {
-					return nil, err
-				}
-			}
+		defer func() { chk(f.Close()) }()
+		h := &SffHeader{}
+		var lofs, tofs uint32
+		if err := h.Read(f, &lofs, &tofs); err != nil {
+			return nil, err
+		}
+		var shofs, xofs, size uint32 = h.FirstSpriteHeaderOffset, 0, 0
+		var indexOfPrevious uint16
+		pl := &PaletteList{}
+		pl.init()
+		foo := func() error {
 			switch h.Ver0 {
 			case 1:
-				if err := s.read(f, h, int64(shofs+32), size, xofs, dummy,
-					pl, false); err != nil {
-					return nil, err
+				if err := s.readHeader(f, &xofs, &size, &indexOfPrevious); err != nil {
+					return err
 				}
 			case 2:
-				if err := s.readV2(f, int64(xofs), size); err != nil {
+				if err := s.readHeaderV2(f, &xofs, &size,
+					lofs, tofs, &indexOfPrevious); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		var dummy *Sprite
+		var newSubHeaderOffset []uint32
+		newSubHeaderOffset = append(newSubHeaderOffset, shofs)
+		i := 0
+		for ; i < int(h.NumberOfSprites); i++ {
+			newSubHeaderOffset = append(newSubHeaderOffset, shofs)
+			f.Seek(int64(shofs), 0)
+			if err := foo(); err != nil {
+				return nil, err
+			}
+			if s.palidx < 0 || s.Group == g && s.Number == n {
+				ip := len(newSubHeaderOffset)
+				for size == 0 {
+					if int(indexOfPrevious) >= ip {
+						return nil, Error("link is invalid")
+					}
+					ip = int(indexOfPrevious)
+					if h.Ver0 == 1 {
+						shofs = newSubHeaderOffset[ip]
+					} else {
+						shofs = h.FirstSpriteHeaderOffset + uint32(ip)*28
+					}
+					f.Seek(int64(shofs), 0)
+					if err := foo(); err != nil {
+						return nil, err
+					}
+				}
+				switch h.Ver0 {
+				case 1:
+					if err := s.read(f, h, int64(shofs+32), size, xofs, dummy,
+						pl, false); err != nil {
+						return nil, err
+					}
+				case 2:
+					if err := s.readV2(f, int64(xofs), size); err != nil {
+						return nil, err
+					}
+				}
+				if s.Group == g && s.Number == n {
+					break
+				}
+				dummy = &Sprite{palidx: s.palidx}
+			}
+			if h.Ver0 == 1 {
+				shofs = xofs
+			} else {
+				shofs += 28
+			}
+		}
+		if i == int(h.NumberOfSprites) {
+			return nil, Error(fmt.Sprintf("Sprite not found: %v, %v", g, n))
+		}
+		if h.Ver0 == 1 {
+			s.Pal = pl.Get(s.palidx)
+			s.palidx = -1
+			return s, nil
+		}
+		if s.coldepth <= 8 {
+			read := func(x interface{}) error {
+				return binary.Read(f, binary.LittleEndian, x)
+			}
+			size = 0
+			indexOfPrevious = uint16(s.palidx)
+			ip := indexOfPrevious + 1
+			for size == 0 && ip != indexOfPrevious {
+				ip = indexOfPrevious
+				shofs = h.FirstPaletteHeaderOffset + uint32(ip)*16
+				f.Seek(int64(shofs)+6, 0)
+				if err := read(&indexOfPrevious); err != nil {
+					return nil, err
+				}
+				if err := read(&xofs); err != nil {
+					return nil, err
+				}
+				if err := read(&size); err != nil {
 					return nil, err
 				}
 			}
-			if s.Group == g && s.Number == n {
-				break
+			f.Seek(int64(lofs+xofs), 0)
+			s.Pal = make([]uint32, 256)
+			var rgba [4]byte
+			for i := 0; i < int(size)/4 && i < len(s.Pal); i++ {
+				if err := read(rgba[:]); err != nil {
+					return nil, err
+				}
+				if h.Ver2 == 0 {
+					rgba[3] = 255
+				}
+				s.Pal[i] = uint32(rgba[3])<<24 | uint32(rgba[2])<<16 | uint32(rgba[1])<<8 | uint32(rgba[0])
 			}
-			dummy = &Sprite{palidx: s.palidx}
+			s.palidx = -1
 		}
-		if h.Ver0 == 1 {
-			shofs = xofs
-		} else {
-			shofs += 28
-		}
-	}
-	if i == int(h.NumberOfSprites) {
-		return nil, Error(fmt.Sprintf("Sprite not found: %v, %v", g, n))
-	}
-	if h.Ver0 == 1 {
-		s.Pal = pl.Get(s.palidx)
-		s.palidx = -1
 		return s, nil
 	}
-	if s.coldepth <= 8 {
-		read := func(x interface{}) error {
-			return binary.Read(f, binary.LittleEndian, x)
-		}
-		size = 0
-		indexOfPrevious = uint16(s.palidx)
-		ip := indexOfPrevious + 1
-		for size == 0 && ip != indexOfPrevious {
-			ip = indexOfPrevious
-			shofs = h.FirstPaletteHeaderOffset + uint32(ip)*16
-			f.Seek(int64(shofs)+6, 0)
-			if err := read(&indexOfPrevious); err != nil {
-				return nil, err
-			}
-			if err := read(&xofs); err != nil {
-				return nil, err
-			}
-			if err := read(&size); err != nil {
-				return nil, err
-			}
-		}
-		f.Seek(int64(lofs+xofs), 0)
-		s.Pal = make([]uint32, 256)
-		var rgba [4]byte
-		for i := 0; i < int(size)/4 && i < len(s.Pal); i++ {
-			if err := read(rgba[:]); err != nil {
-				return nil, err
-			}
-			if h.Ver2 == 0 {
-				rgba[3] = 255
-			}
-			s.Pal[i] = uint32(rgba[3])<<24 | uint32(rgba[2])<<16 | uint32(rgba[1])<<8 | uint32(rgba[0])
-		}
-		s.palidx = -1
-	}
-	return s, nil
-}*/
+*/
 func (s *Sprite) shareCopy(src *Sprite) {
 	s.Pal = src.Pal
 	s.Tex = src.Tex
@@ -536,15 +539,15 @@ func (s *Sprite) SetPxl(px []byte) {
 		return
 	}
 	sys.mainThreadTask <- func() {
-		s.Tex = newTexture(int32(s.Size[0]), int32(s.Size[1]), 8)
-		s.Tex.SetData(px, false)
+		s.Tex = newTexture(int32(s.Size[0]), int32(s.Size[1]), 8, false)
+		s.Tex.SetData(px)
 	}
 }
 
 func (s *Sprite) SetRaw(data []byte, sprWidth int32, sprHeight int32, sprDepth int32) {
 	sys.mainThreadTask <- func() {
-		s.Tex = newTexture(sprWidth, sprHeight, sprDepth)
-		s.Tex.SetData(data, sys.pngFilter)
+		s.Tex = newTexture(sprWidth, sprHeight, sprDepth, sys.pngFilter)
+		s.Tex.SetData(data)
 	}
 }
 
@@ -1011,10 +1014,10 @@ func (s *Sprite) Draw(x, y, xscale, yscale, angle float32, fx *PalFX, window *[4
 	}
 	rp := RenderParams{
 		s.Tex, s.PalTex, s.Size,
-		-x*sys.widthScale, -y*sys.heightScale, notiling,
-		xscale*sys.widthScale, xscale*sys.widthScale, yscale*sys.heightScale, 1, 0,
-		Rotation{angle, 0, 0}, 0, sys.brightness*255>>8|1<<9, 0, fx, window, 0, 0, 0, 0,
-		-xscale*float32(s.Offset[0]), -yscale*float32(s.Offset[1]),
+		-x * sys.widthScale, -y * sys.heightScale, notiling,
+		xscale * sys.widthScale, xscale * sys.widthScale, yscale * sys.heightScale, 1, 0,
+		Rotation{angle, 0, 0}, 0, sys.brightness*255>>8 | 1<<9, 0, fx, window, 0, 0, 0, 0,
+		-xscale * float32(s.Offset[0]), -yscale * float32(s.Offset[1]),
 	}
 	RenderSprite(rp)
 }
@@ -1033,7 +1036,23 @@ func newSff() (s *Sff) {
 	}
 	return
 }
+
+// A simple SFF cache storing shallow copies
+type SffCacheEntry struct {
+	sffData  Sff
+	refCount int
+}
+
+var SffCache = map[string]*SffCacheEntry{}
+
 func loadSff(filename string, char bool) (*Sff, error) {
+	// If this SFF is already in the cache, just return a copy
+	if cached, ok := SffCache[filename]; ok {
+		cached.refCount++
+		s := cached.sffData
+		return &s, nil
+	}
+
 	s := newSff()
 	f, err := os.Open(filename)
 	if err != nil {
@@ -1162,6 +1181,17 @@ func loadSff(filename string, char bool) (*Sff, error) {
 			shofs += 28
 		}
 	}
+
+	// Store a copy of this SFF in the cache
+	SffCache[filename] = &SffCacheEntry{*s, 1}
+	runtime.SetFinalizer(s, func(s *Sff) {
+		cached := SffCache[filename]
+		cached.refCount--
+		if cached.refCount == 0 {
+			delete(SffCache, filename)
+		}
+	})
+
 	return s, nil
 }
 func preloadSff(filename string, char bool, preloadSpr map[[2]int16]bool) (*Sff, []int32, error) {
@@ -1338,9 +1368,7 @@ func captureScreen() {
 	width, height := sys.window.GetSize()
 	pixdata := make([]uint8, 4*width*height)
 	img := image.NewNRGBA(image.Rect(0, 0, width, height))
-	renderer.EndFrame()
-	gl.ReadPixels(pixdata, 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE)
-	renderer.BeginFrame()
+	gfx.ReadPixels(pixdata, width, height)
 	for i := 0; i < 4*width*height; i++ {
 		var x, y, j int
 		x = i % (width * 4)

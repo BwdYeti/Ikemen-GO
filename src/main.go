@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	gl "github.com/fyne-io/gl-js"
-	glfw "github.com/fyne-io/glfw-js"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -54,10 +52,6 @@ func main() {
 
 	processCommandLine()
 
-	// Initialize OpenGL
-	chk(glfw.Init(gl.ContextWatcher))
-	defer glfw.Terminate()
-
 	// Try reading stats
 	if _, err := ioutil.ReadFile("save/stats.json"); err != nil {
 		// If there was an error reading, write an empty json file
@@ -87,6 +81,7 @@ func main() {
 
 	// Initialize game and create window
 	sys.luaLState = sys.init(tmp.GameWidth, tmp.GameHeight)
+	defer sys.shutdown()
 
 	// Begin processing game using its lua scripts
 	if err := sys.luaLState.DoFile(tmp.System); err != nil {
@@ -106,9 +101,6 @@ func main() {
 			panic(err)
 		}
 	}
-
-	// Shutdown
-	sys.shutdown()
 }
 
 // Loops through given comand line arguments and processes them for later use by the game
@@ -195,6 +187,7 @@ type configSettings struct {
 	CommonAir                  string
 	CommonCmd                  string
 	CommonConst                string
+	CommonFx                   []string
 	CommonLua                  []string
 	CommonStates               []string
 	ControllerStickSensitivity float32
@@ -321,8 +314,8 @@ func setupConfig() configSettings {
 	tmp.PanningRange = ClampF(tmp.PanningRange, 0, 100)
 	tmp.Players = int(Clamp(int32(tmp.Players), 1, int32(MaxSimul)*2))
 	tmp.WavChannels = Clamp(tmp.WavChannels, 1, 256)
-	// Save config file
-	cfg, _ := json.MarshalIndent(tmp, "", "	")
+	// Save config file, indent with two spaces to match calls to json.encode() in the Lua code
+	cfg, _ := json.MarshalIndent(tmp, "", "  ")
 	chk(ioutil.WriteFile(cfgPath, cfg, 0644))
 
 	// Set each config property to the system object
@@ -347,6 +340,7 @@ func setupConfig() configSettings {
 		sys.commonCmd = "\n" + string(cmd)
 	}
 	sys.commonConst = tmp.CommonConst
+	sys.commonFx = tmp.CommonFx
 	sys.commonLua = tmp.CommonLua
 	sys.commonStates = tmp.CommonStates
 	sys.clipboardRows = tmp.DebugClipboardRows

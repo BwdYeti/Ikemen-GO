@@ -2002,6 +2002,7 @@ local section = 0
 local row = 0
 local slot = false
 local content = main.f_fileRead(motif.files.select)
+local csCell = 0
 content = content:gsub('([^\r\n;]*)%s*;[^\r\n]*', '%1')
 content = content:gsub('\n%s*\n', '\n')
 for line in content:gmatch('[^\r\n]+') do
@@ -2032,12 +2033,11 @@ for line in content:gmatch('[^\r\n]+') do
 	elseif lineCase:match('^%s*%[%w+%]$') then
 		section = -1
 	elseif section == 1 then --[Characters]
-		local csCell = #main.t_selChars
 		local csCol = (csCell % motif.select_info.columns) + 1
 		local csRow = math.floor(csCell / motif.select_info.columns) + 1
 		while not slot and motif.select_info['cell_' .. csCol .. '_' .. csRow .. '_skip'] == 1 do
 			main.f_addChar('skipslot', true, true, false)
-			csCell = #main.t_selChars
+			csCell = csCell + 1
 			csCol = (csCell % motif.select_info.columns) + 1
 			csRow = math.floor(csCell / motif.select_info.columns) + 1
 		end
@@ -2048,8 +2048,12 @@ for line in content:gmatch('[^\r\n]+') do
 			slot = true
 		elseif slot and lineCase:match('^%s*}%s*$') then --end of 'multiple chars in one slot' assignment
 			slot = false
+			csCell = csCell + 1
 		else
 			main.f_addChar(line, true, true, slot)
+			if not slot then
+				csCell = csCell + 1
+			end
 		end
 	elseif section == 2 then --[ExtraStages]
 		--store 'unlock' param and get rid of everything that follows it
@@ -2393,6 +2397,7 @@ function main.f_default()
 	setAutoLevel(false)
 	setConsecutiveWins(1, 0)
 	setConsecutiveWins(2, 0)
+	setConsecutiveRounds(false)
 	setContinue(false)
 	setGameMode('')
 	setHomeTeam(2) --http://mugenguild.com/forum/topics/ishometeam-triggers-169132.0.html
@@ -2583,6 +2588,7 @@ main.t_itemname = {
 		main.teamMenu[2].tag = true
 		main.teamMenu[2].turns = true
 		main.txt_mainSelect:update({text = motif.select_info.title_netplaysurvivalcoop_text})
+		setConsecutiveRounds(true)
 		setGameMode('netplaysurvivalcoop')
 		hook.run("main.t_itemname")
 		return start.f_selectMode
@@ -2751,6 +2757,7 @@ main.t_itemname = {
 		main.teamMenu[2].tag = true
 		main.teamMenu[2].turns = true
 		main.txt_mainSelect:update({text = motif.select_info.title_survival_text})
+		setConsecutiveRounds(true)
 		setGameMode('survival')
 		hook.run("main.t_itemname")
 		return start.f_selectMode
@@ -2790,6 +2797,7 @@ main.t_itemname = {
 		main.teamMenu[2].tag = true
 		main.teamMenu[2].turns = true
 		main.txt_mainSelect:update({text = motif.select_info.title_survivalcoop_text})
+		setConsecutiveRounds(true)
 		setGameMode('survivalcoop')
 		hook.run("main.t_itemname")
 		return start.f_selectMode
@@ -3996,7 +4004,7 @@ function main.f_menuCommonDraw(t, item, cursorPosY, moveTxt, section, bgdef, tit
 			animUpdate(motif[section].menu_arrow_up_data)
 			animDraw(motif[section].menu_arrow_up_data)
 		end
-		if item >= cursorPosY and items_shown < #t then
+		if item >= cursorPosY and item + motif[section].menu_window_visibleitems - cursorPosY < #t then
 			animUpdate(motif[section].menu_arrow_down_data)
 			animDraw(motif[section].menu_arrow_down_data)
 		end
