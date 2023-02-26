@@ -721,7 +721,7 @@ func (ni *NetInput) Synchronize() error {
 	Srand(seed)
 	var pfTime int32
 	if ni.host {
-		pfTime = sys.preFightTime
+		pfTime = sys.gs.preFightTime
 		if err := ni.writeI32(pfTime); err != nil {
 			return err
 		}

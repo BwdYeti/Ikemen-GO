@@ -730,11 +730,11 @@ func systemScriptInit(l *lua.LState) {
 		return 0
 	})
 	luaRegister(l, "fadeColor", func(l *lua.LState) int {
-		if int32(numArg(l, 2)) > sys.frameCounter {
+		if int32(numArg(l, 2)) > sys.gs.frameCounter {
 			l.Push(lua.LBool(true)) //delayed fade
 			return 1
 		}
-		frame := float64(sys.frameCounter - int32(numArg(l, 2)))
+		frame := float64(sys.gs.frameCounter - int32(numArg(l, 2)))
 		length := numArg(l, 3)
 		if frame > length || length <= 0 {
 			l.Push(lua.LBool(false))
@@ -1074,7 +1074,7 @@ func systemScriptInit(l *lua.LState) {
 				sys.dialogueBarsFlg = false
 				sys.noSoundFlg = false
 				sys.postMatchFlg = false
-				sys.preFightTime += sys.gs.gameTime
+				sys.gs.preFightTime += sys.gs.gameTime
 				sys.gs.gameTime = 0
 				sys.gs.cam.CameraZoomYBound = 0
 				sys.consoleText = []string{}
@@ -1311,7 +1311,7 @@ func systemScriptInit(l *lua.LState) {
 		return 1
 	})
 	luaRegister(l, "getFrameCount", func(l *lua.LState) int {
-		l.Push(lua.LNumber(sys.frameCounter))
+		l.Push(lua.LNumber(sys.gs.frameCounter))
 		return 1
 	})
 	luaRegister(l, "getJoystickName", func(*lua.LState) int {
@@ -3041,7 +3041,7 @@ func triggerFunctions(l *lua.LState) {
 		return 1
 	})
 	luaRegister(l, "gametime", func(*lua.LState) int {
-		l.Push(lua.LNumber(sys.gs.gameTime + sys.preFightTime))
+		l.Push(lua.LNumber(sys.gs.gameTime + sys.gs.preFightTime))
 		return 1
 	})
 	luaRegister(l, "gamewidth", func(*lua.LState) int {

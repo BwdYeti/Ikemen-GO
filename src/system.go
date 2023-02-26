@@ -105,6 +105,8 @@ type GameState struct {
 	randseed                int32
 	time                    int32
 	gameTime                int32
+	frameCounter            int32
+	preFightTime            int32
 	lb                      LifebarValues
 	aiInput                 [MaxSimul*2 + MaxAttachedChar]AiInput
 	charArray               []Char
@@ -414,8 +416,6 @@ type System struct {
 	pngFilter  bool // Controls the GL_TEXTURE_MAG_FILTER on 32bit sprites
 
 	gameMode          string
-	frameCounter      int32
-	preFightTime      int32
 	motifDir          string
 	captureNum        int
 	roundType         [2]RoundType
@@ -626,9 +626,9 @@ func (s *System) await(fps int) bool {
 }
 
 func (s *System) update() bool {
-	s.frameCounter++
+	s.gs.frameCounter++
 	if s.gs.gameTime == 0 {
-		s.preFightTime = s.frameCounter
+		s.gs.preFightTime = s.gs.frameCounter
 	}
 	if s.fileInput != nil {
 		if s.anyHardButton() {

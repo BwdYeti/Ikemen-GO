@@ -1200,7 +1200,7 @@ func (be BytecodeExp) run(c *Char) BytecodeValue {
 			} else if sys.fileInput != nil {
 				pfTime = sys.fileInput.pfTime
 			} else {
-				pfTime = sys.preFightTime
+				pfTime = sys.gs.preFightTime
 			}
 			sys.bcStack.PushI(sys.gs.gameTime + pfTime)
 		case OC_gamewidth:
