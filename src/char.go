@@ -6015,11 +6015,15 @@ func (c *Char) tick() {
 				c.playSound("", false, false, 11, 0, -1, vo, 0, 1, c.localscl, &c.pos[0], false, 0)
 			}
 			c.setSCF(SCF_ko)
+			// Check characters in run order
 			for _, cidx := range sys.gs.charList.runOrder {
-				c := &sys.gs.charArray[cidx]
-				for i, p2cidx := range c.p2enemy {
-					if int(p2cidx) == cidx {
-						c.p2enemy = c.p2enemy[:i+copy(c.p2enemy[i:], c.p2enemy[i+1:])]
+				e := &sys.gs.charArray[cidx]
+				// Check the other character's p2enemy
+				for i, p2cid := range e.p2enemy {
+					// If the active character is that enemy
+					if p2cid == c.id {
+						// Update the other character's p2enemy
+						e.p2enemy = e.p2enemy[:i+copy(e.p2enemy[i:], e.p2enemy[i+1:])]
 						break
 					}
 				}
