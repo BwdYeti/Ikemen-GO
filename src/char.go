@@ -6009,12 +6009,14 @@ func (c *Char) tick() {
 		}
 	}
 	if !c.hitPause() {
+		// If this character has died
 		if c.life <= 0 && !sys.sf(GSF_noko) {
 			if !sys.sf(GSF_nokosnd) && c.alive() {
 				vo := int32(100)
 				c.playSound("", false, false, 11, 0, -1, vo, 0, 1, c.localscl, &c.pos[0], false, 0)
 			}
 			c.setSCF(SCF_ko)
+			// Remove them from the p2enemy list of other characters
 			// Check characters in run order
 			for _, cidx := range sys.gs.charList.runOrder {
 				e := &sys.gs.charArray[cidx]
@@ -7344,6 +7346,15 @@ func (cl *CharList) enemyNear(c *Char, n int32, p2, ignoreDefeatedEnemy, log boo
 		return cl.get((*cache)[n])
 	}
 	if p2 {
+		// Clean up p2enemy by removing entries that are nil
+		for i := len(c.p2enemy) - 1; i >= 0; i-- {
+			e := sys.gs.charList.get(c.p2enemy[i])
+			// Remove this element
+			if (e == nil) {
+				c.p2enemy = append(c.p2enemy[:i], c.p2enemy[i+1:]...)
+			}
+		}
+
 		cache = &c.p2enemy
 	} else {
 		*cache = (*cache)[:0]
