@@ -847,7 +847,6 @@ func systemScriptInit(l *lua.LState) {
 			}
 
 			sys.draws = 0
-			tbl := l.NewTable()
 			sys.matchData = l.NewTable()
 
 			// Anonymous function to perform gameplay
@@ -1010,36 +1009,10 @@ func systemScriptInit(l *lua.LState) {
 			// If not restarting match
 			if winp != -2 {
 				// Cleanup
-				var ti int32
-				tbl_time := l.NewTable()
-				for k, v := range sys.timerRounds {
-					tbl_time.RawSetInt(k+1, lua.LNumber(v))
-					ti += v
-				}
-				sc := sys.scoreStart
-				tbl_score := l.NewTable()
-				for k, v := range sys.scoreRounds {
-					tbl_tmp := l.NewTable()
-					tbl_tmp.RawSetInt(1, lua.LNumber(v[0]))
-					tbl_tmp.RawSetInt(2, lua.LNumber(v[1]))
-					tbl_score.RawSetInt(k+1, tbl_tmp)
-					sc[0] += v[0]
-					sc[1] += v[1]
-				}
-				tbl.RawSetString("match", sys.matchData)
-				tbl.RawSetString("scoreRounds", tbl_score)
-				tbl.RawSetString("timerRounds", tbl_time)
-				tbl.RawSetString("matchTime", lua.LNumber(ti))
-				tbl.RawSetString("roundTime", lua.LNumber(sys.roundTime))
-				tbl.RawSetString("winTeam", lua.LNumber(sys.winTeam))
-				tbl.RawSetString("lastRound", lua.LNumber(sys.round-1))
-				tbl.RawSetString("draws", lua.LNumber(sys.draws))
-				tbl.RawSetString("p1wins", lua.LNumber(sys.wins[0]))
-				tbl.RawSetString("p2wins", lua.LNumber(sys.wins[1]))
-				tbl.RawSetString("p1tmode", lua.LNumber(sys.tmode[0]))
-				tbl.RawSetString("p2tmode", lua.LNumber(sys.tmode[1]))
-				tbl.RawSetString("p1score", lua.LNumber(sc[0]))
-				tbl.RawSetString("p2score", lua.LNumber(sc[1]))
+				logTbl := sys.fightLog()
+				l.Push(lua.LNumber(winp))
+				l.Push(logTbl)
+
 				sys.timerStart = 0
 				sys.timerRounds = []int32{}
 				sys.scoreStart = [2]float32{}
@@ -1047,8 +1020,6 @@ func systemScriptInit(l *lua.LState) {
 				sys.timerCount = []int32{}
 				sys.sel.cdefOverwrite = make(map[int]string)
 				sys.sel.sdefOverwrite = ""
-				l.Push(lua.LNumber(winp))
-				l.Push(tbl)
 				if sys.playBgmFlg {
 					sys.bgm.Open("", 1, 100, 0, 0, 0)
 					sys.playBgmFlg = false

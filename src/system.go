@@ -1929,34 +1929,7 @@ func (s *System) fight() (reload bool) {
 				s.roundsExisted[i]++
 			}
 			s.clearAllSound()
-			tbl_roundNo := s.luaLState.NewTable()
-			for _, p := range s.chars {
-				if len(p) > 0 && p[0].teamside != -1 {
-					tmp := s.luaLState.NewTable()
-					tmp.RawSetString("name", lua.LString(p[0].name))
-					tmp.RawSetString("id", lua.LNumber(p[0].id))
-					tmp.RawSetString("memberNo", lua.LNumber(p[0].memberNo))
-					tmp.RawSetString("selectNo", lua.LNumber(p[0].selectNo))
-					tmp.RawSetString("teamside", lua.LNumber(p[0].teamside))
-					tmp.RawSetString("life", lua.LNumber(p[0].life))
-					tmp.RawSetString("lifeMax", lua.LNumber(p[0].lifeMax))
-					tmp.RawSetString("winquote", lua.LNumber(p[0].winquote))
-					tmp.RawSetString("aiLevel", lua.LNumber(p[0].aiLevel()))
-					tmp.RawSetString("palno", lua.LNumber(p[0].palno()))
-					tmp.RawSetString("ratiolevel", lua.LNumber(p[0].ocd().ratioLevel))
-					tmp.RawSetString("win", lua.LBool(p[0].win()))
-					tmp.RawSetString("winKO", lua.LBool(p[0].winKO()))
-					tmp.RawSetString("winTime", lua.LBool(p[0].winTime()))
-					tmp.RawSetString("winPerfect", lua.LBool(p[0].winPerfect()))
-					tmp.RawSetString("winSpecial", lua.LBool(p[0].winType(WT_S)))
-					tmp.RawSetString("winHyper", lua.LBool(p[0].winType(WT_H)))
-					tmp.RawSetString("drawgame", lua.LBool(p[0].drawgame()))
-					tmp.RawSetString("ko", lua.LBool(p[0].scf(SCF_ko)))
-					tmp.RawSetString("ko_round_middle", lua.LBool(p[0].scf(SCF_ko_round_middle)))
-					tbl_roundNo.RawSetInt(p[0].playerNo+1, tmp)
-				}
-			}
-			s.matchData.RawSetInt(int(s.round-1), tbl_roundNo)
+			s.logRound()
 			s.scoreRounds = append(s.scoreRounds, [2]float32{s.lifebar.sc[0].scorePoints, s.lifebar.sc[1].scorePoints})
 			oldTeamLeader = s.teamLeader
 
@@ -2093,6 +2066,78 @@ func (s *System) fight() (reload bool) {
 	}
 
 	return false
+}
+
+// Creates a lua table of the results of the current round for each character,
+// and stores it into matchData
+func (s *System) logRound() {
+	tbl_roundNo := s.luaLState.NewTable()
+	for _, p := range s.chars {
+		if len(p) > 0 && p[0].teamside != -1 {
+			tmp := s.luaLState.NewTable()
+			tmp.RawSetString("name", lua.LString(p[0].name))
+			tmp.RawSetString("id", lua.LNumber(p[0].id))
+			tmp.RawSetString("memberNo", lua.LNumber(p[0].memberNo))
+			tmp.RawSetString("selectNo", lua.LNumber(p[0].selectNo))
+			tmp.RawSetString("teamside", lua.LNumber(p[0].teamside))
+			tmp.RawSetString("life", lua.LNumber(p[0].life))
+			tmp.RawSetString("lifeMax", lua.LNumber(p[0].lifeMax))
+			tmp.RawSetString("winquote", lua.LNumber(p[0].winquote))
+			tmp.RawSetString("aiLevel", lua.LNumber(p[0].aiLevel()))
+			tmp.RawSetString("palno", lua.LNumber(p[0].palno()))
+			tmp.RawSetString("ratiolevel", lua.LNumber(p[0].ocd().ratioLevel))
+			tmp.RawSetString("win", lua.LBool(p[0].win()))
+			tmp.RawSetString("winKO", lua.LBool(p[0].winKO()))
+			tmp.RawSetString("winTime", lua.LBool(p[0].winTime()))
+			tmp.RawSetString("winPerfect", lua.LBool(p[0].winPerfect()))
+			tmp.RawSetString("winSpecial", lua.LBool(p[0].winType(WT_S)))
+			tmp.RawSetString("winHyper", lua.LBool(p[0].winType(WT_H)))
+			tmp.RawSetString("drawgame", lua.LBool(p[0].drawgame()))
+			tmp.RawSetString("ko", lua.LBool(p[0].scf(SCF_ko)))
+			tmp.RawSetString("ko_round_middle", lua.LBool(p[0].scf(SCF_ko_round_middle)))
+			tbl_roundNo.RawSetInt(p[0].playerNo+1, tmp)
+		}
+	}
+	s.matchData.RawSetInt(int(s.round-1), tbl_roundNo)
+}
+
+// Returns the log of the fight() as a lua table,
+// for use with the -log command line argument
+func (s *System) fightLog() *lua.LTable {
+	tbl := s.luaLState.NewTable()
+	var ti int32
+	tbl_time := s.luaLState.NewTable()
+	for k, v := range s.timerRounds {
+		tbl_time.RawSetInt(k+1, lua.LNumber(v))
+		ti += v
+	}
+	sc := s.scoreStart
+	tbl_score := s.luaLState.NewTable()
+	for k, v := range s.scoreRounds {
+		tbl_tmp := s.luaLState.NewTable()
+		tbl_tmp.RawSetInt(1, lua.LNumber(v[0]))
+		tbl_tmp.RawSetInt(2, lua.LNumber(v[1]))
+		tbl_score.RawSetInt(k+1, tbl_tmp)
+		sc[0] += v[0]
+		sc[1] += v[1]
+	}
+	tbl.RawSetString("match", s.matchData)
+	
+	tbl.RawSetString("scoreRounds", tbl_score)
+	tbl.RawSetString("timerRounds", tbl_time)
+	tbl.RawSetString("matchTime", lua.LNumber(ti))
+	tbl.RawSetString("roundTime", lua.LNumber(s.roundTime))
+	tbl.RawSetString("winTeam", lua.LNumber(s.winTeam))
+	tbl.RawSetString("lastRound", lua.LNumber(s.round-1))
+	tbl.RawSetString("draws", lua.LNumber(s.draws))
+	tbl.RawSetString("p1wins", lua.LNumber(s.wins[0]))
+	tbl.RawSetString("p2wins", lua.LNumber(s.wins[1]))
+	tbl.RawSetString("p1tmode", lua.LNumber(s.tmode[0]))
+	tbl.RawSetString("p2tmode", lua.LNumber(s.tmode[1]))
+	tbl.RawSetString("p1score", lua.LNumber(sc[0]))
+	tbl.RawSetString("p2score", lua.LNumber(sc[1]))
+
+	return tbl
 }
 
 type wincntMap map[string][]int32
