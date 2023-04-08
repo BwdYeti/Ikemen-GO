@@ -1435,6 +1435,10 @@ function main.f_commandLine()
 			end
 		end
 	end
+	if main.flags['-randseed'] ~= nil then
+		local randSeed = tonumber(main.flags['-randseed'])
+		setRandSeed(randSeed)
+	end
 	if main.t_stageDef[stage:lower()] == nil then
 		if addStage(stage) == 0 then
 			panicError("\nUnable to add stage: " .. stage .. "\n")

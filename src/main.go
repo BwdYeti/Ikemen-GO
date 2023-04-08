@@ -137,6 +137,7 @@ Quick VS Options:
 -time <num>             Round time (-1 to disable)
 -rounds <num>           Plays for <num> rounds, and then quits
 -s <stagename>          Loads stage <stagename>
+-randseed <num>         Sets the RNG starting seed
 
 Debug Options:
 -nojoy                  Disables joysticks

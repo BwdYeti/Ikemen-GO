@@ -2143,6 +2143,10 @@ func systemScriptInit(l *lua.LState) {
 		sys.powerShare[tn-1] = boolArg(l, 2)
 		return 0
 	})
+	luaRegister(l, "setRandSeed", func(l *lua.LState) int {
+		Srand(int32(numArg(l, 1)))
+		return 0
+	})
 	luaRegister(l, "setRedLife", func(*lua.LState) int {
 		sys.debugWC.redLifeSet(int32(numArg(l, 1)))
 		return 0
