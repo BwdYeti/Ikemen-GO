@@ -336,6 +336,7 @@ type System struct {
 	scoreStart        [2]float32
 	scoreRounds       [][2]float32
 	matchData         *lua.LTable
+	stateData         *lua.LTable
 	consecutiveWins   [2]int32
 	consecutiveRounds bool
 	firstAttack       [3]int32
@@ -1913,6 +1914,11 @@ func (s *System) fight() (reload bool) {
 	// Loop until end of match
 	fin := false
 	for !s.endMatch {
+		// Update deep log every quarter second
+		if (s.gameTime % (int32(FPS) / 4) == 0) {
+			s.logFightState()
+		}
+
 		s.step = false
 		for _, v := range s.shortcutScripts {
 			if v.Activate {
@@ -2136,6 +2142,66 @@ func (s *System) fightLog() *lua.LTable {
 	tbl.RawSetString("p2tmode", lua.LNumber(s.tmode[1]))
 	tbl.RawSetString("p1score", lua.LNumber(sc[0]))
 	tbl.RawSetString("p2score", lua.LNumber(sc[1]))
+
+	return tbl
+}
+
+// Creates a lua table of the state of the current frame and each character,
+// and stores it into stateData
+func (s *System) logFightState() {
+	tbl_State := s.luaLState.NewTable()
+	tbl_State.RawSetString("randseed", lua.LNumber(s.randseed))
+	tbl_State.RawSetString("round", lua.LNumber(s.round))
+	tbl_State.RawSetString("gameTime", lua.LNumber(s.gameTime))
+	tbl_State.RawSetString("camX", lua.LNumber(s.cam.Pos[0]))
+	tbl_State.RawSetString("camY", lua.LNumber(s.cam.Pos[1]))
+	tbl_State.RawSetString("camscale", lua.LNumber(s.cam.Scale))
+
+	for _, p := range s.chars {
+		if len(p) > 0 && p[0].teamside != -1 {
+			tmp := s.luaLState.NewTable()
+			tmp.RawSetString("name", lua.LString(p[0].name))
+			tmp.RawSetString("win", lua.LBool(p[0].win()))
+			tmp.RawSetString("posX", lua.LNumber(p[0].pos[0]))
+			tmp.RawSetString("posY", lua.LNumber(p[0].pos[1]))
+			tmp.RawSetString("velX", lua.LNumber(p[0].vel[0]))
+			tmp.RawSetString("velY", lua.LNumber(p[0].vel[1]))
+			tmp.RawSetString("time", lua.LNumber(p[0].time()))
+			tmp.RawSetString("animNo", lua.LNumber(p[0].animNo))
+			tmp.RawSetString("animTime", lua.LNumber(p[0].animElemTime(1).ToI()))
+			tmp.RawSetString("life", lua.LNumber(p[0].life))
+			tmp.RawSetString("redLife", lua.LNumber(p[0].redLife))
+			tmp.RawSetString("power", lua.LNumber(p[0].power))
+			tmp.RawSetString("hitCount", lua.LNumber(p[0].hitCount))
+			// This does not track the number of children's children
+			numChildren := 0
+			for _, ch := range p[0].children {
+				if ch != nil {
+					numChildren++
+				}
+			}
+			tmp.RawSetString("children", lua.LNumber(numChildren))
+			tmp.RawSetString("targets", lua.LNumber(len(p[0].targets)))
+			tbl_State.RawSetInt(p[0].playerNo+1, tmp)
+		}
+	}
+	s.stateData.RawSetInt(int(s.gameTime), tbl_State)
+}
+
+// Returns the game state samples recorded in stateData as a lua table,
+// for use with the -recordstates command line argument
+func (s *System) fightStateSamplesLog() *lua.LTable {
+	tbl := s.luaLState.NewTable()
+	tbl.RawSetString("match", s.stateData)
+	
+	tbl.RawSetString("gameTime", lua.LNumber(s.gameTime))
+	tbl.RawSetString("winTeam", lua.LNumber(s.winTeam))
+	tbl.RawSetString("lastRound", lua.LNumber(s.round-1))
+	tbl.RawSetString("draws", lua.LNumber(s.draws))
+	tbl.RawSetString("p1wins", lua.LNumber(s.wins[0]))
+	tbl.RawSetString("p2wins", lua.LNumber(s.wins[1]))
+	tbl.RawSetString("p1tmode", lua.LNumber(s.tmode[0]))
+	tbl.RawSetString("p2tmode", lua.LNumber(s.tmode[1]))
 
 	return tbl
 }

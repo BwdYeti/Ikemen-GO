@@ -848,6 +848,7 @@ func systemScriptInit(l *lua.LState) {
 
 			sys.draws = 0
 			sys.matchData = l.NewTable()
+			sys.stateData = l.NewTable()
 
 			// Anonymous function to perform gameplay
 			fight := func() (int32, error) {
@@ -1010,8 +1011,11 @@ func systemScriptInit(l *lua.LState) {
 			if winp != -2 {
 				// Cleanup
 				logTbl := sys.fightLog()
+				stateTbl := sys.fightStateSamplesLog()
+				
 				l.Push(lua.LNumber(winp))
 				l.Push(logTbl)
+				l.Push(stateTbl)
 
 				sys.timerStart = 0
 				sys.timerRounds = []int32{}
@@ -1039,7 +1043,7 @@ func systemScriptInit(l *lua.LState) {
 				sys.cam.CameraZoomYBound = 0
 				sys.consoleText = []string{}
 				sys.stageLoopNo = 0
-				return 2
+				return 3
 			}
 		}
 	})

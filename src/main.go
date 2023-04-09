@@ -138,6 +138,7 @@ Quick VS Options:
 -rounds <num>           Plays for <num> rounds, and then quits
 -s <stagename>          Loads stage <stagename>
 -randseed <num>         Sets the RNG starting seed
+-recordstates <logfile> Records detailed match data to <logfile>
 
 Debug Options:
 -nojoy                  Disables joysticks

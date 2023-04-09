@@ -1500,9 +1500,12 @@ function main.f_commandLine()
 	while loading() do
 		--do nothing
 	end
-	local winner, t_gameStats = game()
+	local winner, t_gameStats, t_gameStateSamples = game()
 	if main.flags['-log'] ~= nil then
 		main.f_printTable(t_gameStats, main.flags['-log'])
+	end
+	if main.flags['-recordstates'] ~= nil then
+		main.f_printTable(t_gameStateSamples, main.flags['-recordstates'])
 	end
 	os.exit()
 end
