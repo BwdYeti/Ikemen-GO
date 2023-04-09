@@ -195,6 +195,7 @@ type CharData struct {
 	attack      int32
 	defence     int32
 	fall        struct {
+		defence_up  int32
 		defence_mul float32
 	}
 	liedown struct {
@@ -221,6 +222,7 @@ func (cd *CharData) init() {
 	cd.guardpoints = 1000
 	cd.attack = 100
 	cd.defence = 100
+	cd.fall.defence_up = 50
 	cd.fall.defence_mul = 1.5
 	cd.liedown.time = 60
 	cd.airjuggle = 15
@@ -1598,6 +1600,7 @@ func (cgi *CharGlobalInfo) clearPCTime() {
 type StateState struct {
 	stateType       StateType
 	moveType        MoveType
+	prevMoveType    MoveType
 	physics         StateType
 	ps              []int32
 	wakegawakaranai [MaxSimul*2 + MaxAttachedChar][]bool
@@ -1607,6 +1610,7 @@ type StateState struct {
 }
 
 func (ss *StateState) clear() {
+	ss.prevMoveType = ss.moveType
 	ss.stateType, ss.moveType, ss.physics = ST_S, MT_I, ST_N
 	ss.ps = nil
 	for i, v := range ss.wakegawakaranai {
@@ -2162,10 +2166,9 @@ func (c *Char) load(def string) error {
 						c.guardPointsMax = gi.data.guardpoints
 						is.ReadI32("attack", &gi.data.attack)
 						is.ReadI32("defence", &gi.data.defence)
+						is.ReadI32("fall.defence_up", &gi.data.fall.defence_up)
+						gi.data.fall.defence_mul = (float32(gi.data.fall.defence_up) + 100) / 100
 						var i32 int32
-						if is.ReadI32("fall.defence_up", &i32) {
-							gi.data.fall.defence_mul = (float32(i32) + 100) / 100
-						}
 						if is.ReadI32("liedown.time", &i32) {
 							gi.data.liedown.time = Max(1, i32)
 						}
@@ -2834,7 +2837,7 @@ func (c *Char) constp(coordinate, value float32) BytecodeValue {
 	return BytecodeFloat(c.stCgi().localcoord[0] / coordinate * value)
 }
 func (c *Char) ctrl() bool {
-	return c.scf(SCF_ctrl) && !c.ctrlOver() && !c.scf(SCF_standby) &&
+	return c.scf(SCF_ctrl) && c.roundState() != 4 && !c.scf(SCF_standby) &&
 		!c.scf(SCF_dizzy) && !c.scf(SCF_guardbreak)
 }
 func (c *Char) drawgame() bool {
@@ -3051,7 +3054,7 @@ func (c *Char) projCancelTime(pid BytecodeValue) BytecodeValue {
 		return BytecodeSF()
 	}
 	id := pid.ToI()
-	if id > 0 && id != c.gi().pcid || c.gi().pctype != PC_Cancel {
+	if (id > 0 && id != c.gi().pcid) || c.gi().pctype != PC_Cancel || c.helperIndex > 0 {
 		return BytecodeInt(-1)
 	}
 	return BytecodeInt(c.gi().pctime)
@@ -3061,7 +3064,7 @@ func (c *Char) projContactTime(pid BytecodeValue) BytecodeValue {
 		return BytecodeSF()
 	}
 	id := pid.ToI()
-	if id > 0 && id != c.gi().pcid {
+	if (id > 0 && id != c.gi().pcid) || c.helperIndex > 0 {
 		return BytecodeInt(-1)
 	}
 	return BytecodeInt(c.gi().pctime)
@@ -3071,7 +3074,7 @@ func (c *Char) projGuardedTime(pid BytecodeValue) BytecodeValue {
 		return BytecodeSF()
 	}
 	id := pid.ToI()
-	if id > 0 && id != c.gi().pcid || c.gi().pctype != PC_Guarded {
+	if (id > 0 && id != c.gi().pcid) || c.gi().pctype != PC_Guarded || c.helperIndex > 0 {
 		return BytecodeInt(-1)
 	}
 	return BytecodeInt(c.gi().pctime)
@@ -3081,7 +3084,7 @@ func (c *Char) projHitTime(pid BytecodeValue) BytecodeValue {
 		return BytecodeSF()
 	}
 	id := pid.ToI()
-	if id > 0 && id != c.gi().pcid || c.gi().pctype != PC_Hit {
+	if (id > 0 && id != c.gi().pcid) || c.gi().pctype != PC_Hit || c.helperIndex > 0 {
 		return BytecodeInt(-1)
 	}
 	return BytecodeInt(c.gi().pctime)
@@ -3273,13 +3276,17 @@ func (c *Char) playSound(ffx string, lowpriority, loop bool, g, n, chNo, vol int
 
 // Furimuki = Turn around
 func (c *Char) turn() {
-	if (c.scf(SCF_ctrl) || c.roundState() == 3) && c.helperIndex == 0 {
+	if c.scf(SCF_ctrl) && c.helperIndex == 0 {
 		if e := sys.charList.enemyNear(c, 0, true, true, false); c.rdDistX(e, c).ToF() < 0 && !e.sf(CSF_noturntarget) {
 			switch c.ss.stateType {
 			case ST_S:
-				c.changeAnim(5, "")
+				if c.animNo != 5 {
+					c.changeAnim(5, "")
+				}
 			case ST_C:
-				c.changeAnim(6, "")
+				if c.animNo != 6 {
+					c.changeAnim(6, "")
+				}
 			}
 			c.setFacing(-c.facing)
 		}
@@ -3326,6 +3333,7 @@ func (c *Char) stateChange1(no int32, pn int) bool {
 		sys.appendToConsole(c.warn() + fmt.Sprintf("changed to invalid state %v (from state %v)", no, c.ss.prevno))
 		sys.errLog.Printf("Invalid state: P%v:%v\n", pn+1, no)
 		c.ss.sb = *newStateBytecode(pn)
+		c.ss.sb.prevMoveType = c.ss.sb.moveType
 		c.ss.sb.stateType, c.ss.sb.moveType, c.ss.sb.physics = ST_U, MT_U, ST_U
 	}
 	c.ss.sb.ctrlsps = make([]int32, len(c.ss.sb.ctrlsps))
@@ -3381,6 +3389,9 @@ func (c *Char) destroy() {
 		c.fakeComboDmg = 0
 		c.fakeReceivedHits = 0
 		c.fakeCombo = false
+		if c.player {
+			sys.charList.p2enemyDelete(c)
+		}
 		for _, tid := range c.targets {
 			if t := sys.playerID(tid); t != nil {
 				if t.bindToId == c.id {
@@ -4654,7 +4665,7 @@ func (c *Char) angleSet(a float32) {
 	c.angle = a
 }
 func (c *Char) ctrlOver() bool {
-	return sys.time == 0 ||
+	return !c.alive() || sys.time == 0 ||
 		sys.intro <= -(sys.lifebar.ro.over_hittime+sys.lifebar.ro.over_waittime)
 }
 func (c *Char) over() bool {
@@ -5144,6 +5155,18 @@ func (c *Char) setBindToId(to *Char) {
 }
 func (c *Char) bind() {
 	if c.bindTime == 0 {
+		if bt := sys.playerID(c.bindToId); bt != nil {
+			if bt.hasTarget(c.id) {
+				if bt.sf(CSF_destroy) {
+					sys.appendToConsole(c.warn() + fmt.Sprintf("6SelfState 5050, helper destroyed: %v", bt.name))
+					if c.ss.moveType == MT_H {
+						c.selfState(5050, -1, -1, -1, "")
+					}
+					c.setBindTime(0)
+					return
+				}
+			}
+		}
 		if c.bindToId > 0 {
 			c.setBindTime(0)
 		}
@@ -5151,14 +5174,6 @@ func (c *Char) bind() {
 	}
 	if bt := sys.playerID(c.bindToId); bt != nil {
 		if bt.hasTarget(c.id) {
-			if bt.sf(CSF_destroy) {
-				sys.appendToConsole(c.warn() + fmt.Sprintf("SelfState 5050, helper destroyed: %v", bt.name))
-				if c.ss.moveType == MT_H {
-					c.selfState(5050, -1, -1, -1, "")
-				}
-				c.setBindTime(0)
-				return
-			}
 			if !math.IsNaN(float64(c.bindPos[0])) {
 				c.setXV(c.facing * bt.facing * bt.vel[0])
 			}
@@ -5431,7 +5446,7 @@ func (c *Char) actionPrepare() {
 	}
 	c.acttmp = -int8(Btoi(c.pauseBool)) * 2
 	c.unsetSCF(SCF_guard)
-	if !(c.scf(SCF_ko) || c.ctrlOver()) &&
+	if !c.ctrlOver() &&
 		((c.scf(SCF_ctrl) || c.ss.no == 52) &&
 			c.ss.moveType == MT_I || c.inGuardState()) && c.cmd != nil &&
 		(sys.autoguard[c.playerNo] || c.cmd[0].Buffer.B > 0 || c.sf(CSF_autoguard)) &&
@@ -5450,7 +5465,7 @@ func (c *Char) actionPrepare() {
 				c.airJumpCount = 0
 				c.unsetSCF(SCF_airjump)
 			}
-			if c.ctrl() && (c.key >= 0 || c.helperIndex == 0) {
+			if c.ctrl() && !c.ctrlOver() && (c.key >= 0 || c.helperIndex == 0) {
 				if !c.sf(CSF_nohardcodedkeys) {
 					if !c.sf(CSF_nojump) && !sys.roundEnd() && c.ss.stateType == ST_S && c.cmd[0].Buffer.U > 0 {
 						if c.ss.no != 40 {
@@ -5526,11 +5541,11 @@ func (c *Char) actionPrepare() {
 			c.inputFlag = 0
 			c.setSF(CSF_stagebound)
 			if c.player {
-				if c.alive() || !c.scf(SCF_over) || !c.scf(SCF_ko_round_middle) {
+				if c.alive() || c.ss.no != 5150 || c.numPartner() == 0 {
 					c.setSF(CSF_screenbound | CSF_movecamera_x | CSF_movecamera_y)
-					if (c.alive() || !c.scf(SCF_over)) && c.roundState() > 0 {
-						c.setSF(CSF_playerpush)
-					}
+				}
+				if c.roundState() > 0 && (c.alive() || c.numPartner() == 0) {
+					c.setSF(CSF_playerpush)
 				}
 			}
 			c.angleScale = [...]float32{1, 1}
@@ -5767,9 +5782,6 @@ func (c *Char) update(cvmin, cvmax,
 			if c.inGuardState() {
 				c.setSCF(SCF_guard)
 			}
-			if c.ghv.hitshaketime <= 0 && c.ghv.hittime >= 0 {
-				c.ghv.hittime--
-			}
 			if c.ss.moveType == MT_H {
 				if c.ghv.guarded {
 					c.receivedHits = 0
@@ -5787,34 +5799,40 @@ func (c *Char) update(cvmin, cvmax,
 				// So to explain because this is did confuse the future to me.
 				// Here we set up the extra frames the combo is gonna have.
 				// Once the combo becomes non-valid and becomes false this start to count down.
+				// This timer is related to the frame where a character has already recovered from a combo, but is still not allowed to act.
 				c.comboExtraFrameWindow = sys.comboExtraFrameWindow
 			} else {
 				if c.hittmp > 0 {
 					c.hittmp = 0
 				}
-				c.superDefenseMul = 1
-				c.fallDefenseMul = 1
-				c.ghv.hitshaketime = 0
-				c.ghv.fallf = false
-				c.ghv.fallcount = 0
-				c.ghv.hitid = c.ghv.hitid >> 31
-				// Mugen has a combo delay in lifebar were is active for 1 frame more than it should.
-				if c.comboExtraFrameWindow <= 0 && !c.scf(SCF_dizzy) {
-					c.fakeReceivedHits = 0
-					c.fakeComboDmg = 0
-					c.fakeCombo = false
-				} else {
-					c.fakeCombo = true
-					c.comboExtraFrameWindow--
+				if !c.scf(SCF_dizzy) {
+					c.superDefenseMul = 1
+					c.fallDefenseMul = 1
+					c.ghv.hitshaketime = 0
+					c.ghv.fallf = false
+					c.ghv.fallcount = 0
+					c.ghv.hitid = c.ghv.hitid >> 31
+					// Mugen has a combo delay in lifebar were is active for 1 frame more than it should.
+					if c.comboExtraFrameWindow <= 0 {
+						c.fakeReceivedHits = 0
+						c.fakeComboDmg = 0
+						c.fakeCombo = false
+					} else {
+						c.fakeCombo = true
+						c.comboExtraFrameWindow--
+					}
+					c.receivedHits = 0
+					c.comboDmg = 0
+					c.ghv.attr = 0
+					c.ghv.id = 0
+					c.ghv.playerNo = -1
+					c.ghv.score = 0
 				}
-				c.receivedHits = 0
-				c.comboDmg = 0
-				c.ghv.attr = 0
-				c.ghv.id = 0
-				c.ghv.playerNo = -1
-				c.ghv.score = 0
 			}
-			if (c.ss.moveType == MT_H || c.ss.no == 52) && c.pos[1] == 0 &&
+			if c.ghv.hitshaketime <= 0 && c.ghv.hittime >= 0 {
+				c.ghv.hittime--
+			}
+			if ((c.ss.moveType == MT_H && (c.ss.stateType == ST_S || c.ss.stateType == ST_C)) || c.ss.no == 52) && c.pos[1] == 0 &&
 				AbsF(c.pos[0]-c.oldPos[0]) >= 1 && c.ss.time%3 == 0 && !c.sf(CSF_nomakedust) {
 				c.makeDust(0, 0)
 			}
@@ -5922,7 +5940,7 @@ func (c *Char) tick() {
 		}
 	}
 	if c.sf(CSF_gethit) {
-		c.ss.moveType = MT_H
+		c.ss.prevMoveType, c.ss.moveType = c.ss.moveType, MT_H
 		if c.hitPauseTime > 0 {
 			c.ss.clearWw()
 		}
@@ -6021,14 +6039,7 @@ func (c *Char) tick() {
 				c.playSound("", false, false, 11, 0, -1, vo, 0, 1, c.localscl, &c.pos[0], false, 0)
 			}
 			c.setSCF(SCF_ko)
-			for _, cl := range sys.charList.runOrder {
-				for i, p2cl := range cl.p2enemy {
-					if p2cl == c {
-						cl.p2enemy = cl.p2enemy[:i+copy(cl.p2enemy[i:], cl.p2enemy[i+1:])]
-						break
-					}
-				}
-			}
+			sys.charList.p2enemyDelete(c)
 		}
 		if c.ss.moveType != MT_H {
 			c.recoverTime = c.gi().data.liedown.time
@@ -6705,7 +6716,7 @@ func (cl *CharList) clsn(getter *Char, proj bool) {
 					c.counterHit = true
 				}
 				if sys.firstAttack[2] == 0 && sys.firstAttack[c.teamside] == 0 && ghvset &&
-					getter.hoIdx < 0 && c.teamside != -1 {
+					getter.hoIdx < 0 && getter.helperIndex == 0 && c.teamside != -1 {
 					sys.firstAttack[c.teamside] = c.id
 				}
 				if !math.IsNaN(float64(hd.score[0])) {
@@ -7220,6 +7231,16 @@ func (cl *CharList) get(id int32) *Char {
 		return nil
 	}
 	return cl.idMap[id]
+}
+func (cl *CharList) p2enemyDelete(c *Char) {
+	for _, e := range cl.runOrder {
+		for i, p2cl := range e.p2enemy {
+			if p2cl == c {
+				e.p2enemy = e.p2enemy[:i+copy(e.p2enemy[i:], e.p2enemy[i+1:])]
+				break
+			}
+		}
+	}
 }
 func (cl *CharList) enemyNear(c *Char, n int32, p2, ignoreDefeatedEnemy, log bool) *Char {
 	if n < 0 {

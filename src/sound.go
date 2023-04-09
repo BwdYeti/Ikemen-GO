@@ -7,13 +7,14 @@ import (
 	"math"
 	"os"
 
-	"github.com/faiface/beep"
-	"github.com/faiface/beep/effects"
+	"github.com/samhocevar/beep"
+	"github.com/samhocevar/beep/effects"
 
-	"github.com/faiface/beep/mp3"
-	"github.com/faiface/beep/speaker"
-	"github.com/faiface/beep/vorbis"
-	"github.com/faiface/beep/wav"
+	"github.com/samhocevar/beep/midi"
+	"github.com/samhocevar/beep/mp3"
+	"github.com/samhocevar/beep/speaker"
+	"github.com/samhocevar/beep/vorbis"
+	"github.com/samhocevar/beep/wav"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 	audioFrequency       = 48000
 	audioPrecision       = 4
 	audioResampleQuality = 3
+	audioSoundFont       = "sound/soundfont.sf2" // default path for MIDI soundfont
 )
 
 // ------------------------------------------------------------------
@@ -192,6 +194,13 @@ func (bgm *Bgm) Open(filename string, loop, bgmVolume, bgmLoopStart, bgmLoopEnd,
 		//} else if HasExtension(bgm.filename, ".flac") {
 		//	bgm.streamer, format, err = flac.Decode(f)
 		//	bgm.format = "flac"
+	} else if HasExtension(bgm.filename, ".mid") || HasExtension(bgm.filename, ".midi") {
+		if soundfont, sferr := loadSoundFont(audioSoundFont); sferr != nil {
+			err = sferr
+		} else {
+			bgm.streamer, format, err = midi.Decode(f, soundfont)
+			bgm.format = "midi"
+		}
 	} else {
 		err = Error(fmt.Sprintf("unsupported file extension: %v", bgm.filename))
 	}
@@ -213,6 +222,19 @@ func (bgm *Bgm) Open(filename string, loop, bgmVolume, bgmLoopStart, bgmLoopEnd,
 	bgm.UpdateVolume()
 	bgm.streamer.Seek(startPosition)
 	speaker.Play(bgm.ctrl)
+}
+
+func loadSoundFont(filename string) (*midi.SoundFont, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	soundfont, err := midi.NewSoundFont(f)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return soundfont, nil
 }
 
 func (bgm *Bgm) SetPaused(paused bool) {

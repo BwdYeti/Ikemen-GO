@@ -227,6 +227,7 @@ const (
 	OC_const_data_dizzypoints
 	OC_const_data_attack
 	OC_const_data_defence
+	OC_const_data_fall_defence_up
 	OC_const_data_fall_defence_mul
 	OC_const_data_liedown_time
 	OC_const_data_airjuggle
@@ -513,6 +514,7 @@ const (
 	OC_ex_vel_z
 	OC_ex_jugglepoints
 	OC_ex_prevanim
+	OC_ex_prevmovetype
 	OC_ex_reversaldefattr
 	OC_ex_bgmlength
 	OC_ex_bgmposition
@@ -1175,13 +1177,13 @@ func (be BytecodeExp) run(c *Char) BytecodeValue {
 		case OC_animtime:
 			sys.bcStack.PushI(c.animTime())
 		case OC_backedge:
-			sys.bcStack.PushF(c.backEdge())
+			sys.bcStack.PushF(c.backEdge() * (c.localscl / oc.localscl))
 		case OC_backedgebodydist:
-			sys.bcStack.PushI(int32(c.backEdgeBodyDist()))
+			sys.bcStack.PushI(int32(c.backEdgeBodyDist() * (c.localscl / oc.localscl)))
 		case OC_backedgedist:
-			sys.bcStack.PushI(int32(c.backEdgeDist()))
+			sys.bcStack.PushI(int32(c.backEdgeDist() * (c.localscl / oc.localscl)))
 		case OC_bottomedge:
-			sys.bcStack.PushF(c.bottomEdge())
+			sys.bcStack.PushF(c.bottomEdge() * (c.localscl / oc.localscl))
 		case OC_camerapos_x:
 			sys.bcStack.PushF(sys.cam.Pos[0] / oc.localscl)
 		case OC_camerapos_y:
@@ -1210,11 +1212,11 @@ func (be BytecodeExp) run(c *Char) BytecodeValue {
 		case OC_facing:
 			sys.bcStack.PushI(int32(c.facing))
 		case OC_frontedge:
-			sys.bcStack.PushF(c.frontEdge())
+			sys.bcStack.PushF(c.frontEdge() * (c.localscl / oc.localscl))
 		case OC_frontedgebodydist:
-			sys.bcStack.PushI(int32(c.frontEdgeBodyDist()))
+			sys.bcStack.PushI(int32(c.frontEdgeBodyDist() * (c.localscl / oc.localscl)))
 		case OC_frontedgedist:
-			sys.bcStack.PushI(int32(c.frontEdgeDist()))
+			sys.bcStack.PushI(int32(c.frontEdgeDist() * (c.localscl / oc.localscl)))
 		case OC_gameheight:
 			// Optional exception preventing GameHeight from being affected by stage zoom.
 			if c.stCgi().ver[0] == 1 && c.stCgi().ver[1] == 0 &&
@@ -1265,7 +1267,7 @@ func (be BytecodeExp) run(c *Char) BytecodeValue {
 		case OC_ishelper:
 			*sys.bcStack.Top() = c.isHelper(*sys.bcStack.Top())
 		case OC_leftedge:
-			sys.bcStack.PushF(c.leftEdge())
+			sys.bcStack.PushF(c.leftEdge() * (c.localscl / oc.localscl))
 		case OC_life:
 			sys.bcStack.PushI(c.life)
 		case OC_lifemax:
@@ -1332,7 +1334,7 @@ func (be BytecodeExp) run(c *Char) BytecodeValue {
 		case OC_random:
 			sys.bcStack.PushI(Rand(0, 999))
 		case OC_rightedge:
-			sys.bcStack.PushF(c.rightEdge())
+			sys.bcStack.PushF(c.rightEdge() * (c.localscl / oc.localscl))
 		case OC_roundstate:
 			sys.bcStack.PushI(c.roundState())
 		case OC_screenheight:
@@ -1362,7 +1364,7 @@ func (be BytecodeExp) run(c *Char) BytecodeValue {
 		case OC_time:
 			sys.bcStack.PushI(c.time())
 		case OC_topedge:
-			sys.bcStack.PushF(c.topEdge())
+			sys.bcStack.PushF(c.topEdge() * (c.localscl / oc.localscl))
 		case OC_uniqhitcount:
 			sys.bcStack.PushI(c.uniqHitCount)
 		case OC_vel_x:
@@ -1439,6 +1441,8 @@ func (be BytecodeExp) run_const(c *Char, i *int, oc *Char) {
 		sys.bcStack.PushI(c.gi().data.attack)
 	case OC_const_data_defence:
 		sys.bcStack.PushI(c.gi().data.defence)
+	case OC_const_data_fall_defence_up:
+		sys.bcStack.PushI(c.gi().data.fall.defence_up)
 	case OC_const_data_fall_defence_mul:
 		sys.bcStack.PushF(1.0 / c.gi().data.fall.defence_mul)
 	case OC_const_data_liedown_time:
@@ -2041,9 +2045,9 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 	case OC_ex_sprpriority:
 		sys.bcStack.PushI(c.sprPriority)
 	case OC_ex_stagebackedge:
-		sys.bcStack.PushF(c.stageBackEdge())
+		sys.bcStack.PushF(c.stageBackEdge() * (c.localscl / oc.localscl))
 	case OC_ex_stagefrontedge:
-		sys.bcStack.PushF(c.stageFrontEdge())
+		sys.bcStack.PushF(c.stageFrontEdge() * (c.localscl / oc.localscl))
 	case OC_ex_stagetime:
 		sys.bcStack.PushI(sys.stage.stageTime)
 	case OC_ex_standby:
@@ -2066,6 +2070,9 @@ func (be BytecodeExp) run_ex(c *Char, i *int, oc *Char) {
 		sys.bcStack.PushI(c.juggle)
 	case OC_ex_prevanim:
 		sys.bcStack.PushI(c.prevAnimNo)
+	case OC_ex_prevmovetype:
+		sys.bcStack.PushB(c.ss.prevMoveType == MoveType(be[*i])<<15)
+		*i++
 	case OC_ex_reversaldefattr:
 		sys.bcStack.PushB(c.reversalDefAttr(*(*int32)(unsafe.Pointer(&be[*i]))))
 		*i += 4
@@ -2854,6 +2861,7 @@ func (sc tagOut) Run(c *Char, _ []int32) bool {
 	}
 	if tagSCF == 1 {
 		crun.setSCF(SCF_standby)
+		sys.charList.p2enemyDelete(crun)
 	}
 	if partnerNo != -1 && crun.partnerV2(partnerNo) != nil {
 		partner := crun.partnerV2(partnerNo)
@@ -2861,6 +2869,7 @@ func (sc tagOut) Run(c *Char, _ []int32) bool {
 		if partnerStateNo >= 0 {
 			partner.changeState(partnerStateNo, -1, -1, "")
 		}
+		sys.charList.p2enemyDelete(partner)
 	}
 	return false
 }
@@ -3658,6 +3667,7 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 	eid := int32(-1)
 	var expls []*Explod
 	rp := [...]int32{-1, 0}
+	remap := false
 	eachExpl := func(f func(e *Explod)) {
 		for _, e := range expls {
 			f(e)
@@ -3677,6 +3687,7 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 			if len(exp) > 1 {
 				rp[1] = exp[1].evalI(c)
 			}
+			remap = true
 		case explod_id:
 			eid = exp[0].evalI(c)
 		default:
@@ -3686,7 +3697,7 @@ func (sc modifyExplod) Run(c *Char, _ []int32) bool {
 					return false
 				}
 				eachExpl(func(e *Explod) {
-					if e.ownpal {
+					if e.ownpal && remap {
 						crun.remapPal(e.palfx, [...]int32{1, 1}, rp)
 					}
 				})
@@ -3907,6 +3918,7 @@ func (sc gameMakeAnim) Run(c *Char, _ []int32) bool {
 				}
 				e.id = 0
 			}
+			e.ontop, e.sprpriority, e.ownpal = true, math.MinInt32, true
 		}
 		switch id {
 		case gameMakeAnim_pos:
@@ -3931,7 +3943,6 @@ func (sc gameMakeAnim) Run(c *Char, _ []int32) bool {
 	if e == nil {
 		return false
 	}
-	e.ontop, e.sprpriority, e.ownpal = true, math.MinInt32, true
 	e.offset[0] -= float32(crun.size.draw.offset[0])
 	e.offset[1] -= float32(crun.size.draw.offset[1])
 	e.setPos(crun)
@@ -5768,6 +5779,7 @@ func (sc stateTypeSet) Run(c *Char, _ []int32) bool {
 		case stateTypeSet_statetype:
 			crun.ss.stateType = StateType(exp[0].evalI(c))
 		case stateTypeSet_movetype:
+			crun.ss.prevMoveType = crun.ss.moveType
 			crun.ss.moveType = MoveType(exp[0].evalI(c))
 		case stateTypeSet_physics:
 			crun.ss.physics = StateType(exp[0].evalI(c))
@@ -6701,9 +6713,9 @@ func (sc offset) Run(c *Char, _ []int32) bool {
 	StateControllerBase(sc).run(c, func(id byte, exp []BytecodeExp) bool {
 		switch id {
 		case offset_x:
-			crun.offset[0] = exp[0].evalF(c) * crun.localscl
+			crun.offset[0] = exp[0].evalF(c)
 		case offset_y:
-			crun.offset[1] = exp[0].evalF(c) * crun.localscl
+			crun.offset[1] = exp[0].evalF(c)
 		case offset_redirectid:
 			if rid := sys.playerID(exp[0].evalI(c)); rid != nil {
 				crun = rid
@@ -8302,24 +8314,26 @@ func (sc cameraCtrl) Run(c *Char, _ []int32) bool {
 
 // StateDef data struct
 type StateBytecode struct {
-	stateType StateType
-	moveType  MoveType
-	physics   StateType
-	playerNo  int
-	stateDef  stateDef
-	block     StateBlock
-	ctrlsps   []int32
-	numVars   int32
+	stateType    StateType
+	moveType     MoveType
+	prevMoveType MoveType
+	physics      StateType
+	playerNo     int
+	stateDef     stateDef
+	block        StateBlock
+	ctrlsps      []int32
+	numVars      int32
 }
 
 // StateDef bytecode creation function
 func newStateBytecode(pn int) *StateBytecode {
 	sb := &StateBytecode{
-		stateType: ST_S,
-		moveType:  MT_I,
-		physics:   ST_N,
-		playerNo:  pn,
-		block:     *newStateBlock(),
+		stateType:    ST_S,
+		prevMoveType: MT_I,
+		moveType:     MT_I,
+		physics:      ST_N,
+		playerNo:     pn,
+		block:        *newStateBlock(),
 	}
 	return sb
 }
@@ -8328,6 +8342,7 @@ func (sb *StateBytecode) init(c *Char) {
 		c.ss.stateType = sb.stateType
 	}
 	if sb.moveType != MT_U {
+		c.ss.prevMoveType = c.ss.moveType
 		c.ss.moveType = sb.moveType
 	}
 	if sb.physics != ST_U {

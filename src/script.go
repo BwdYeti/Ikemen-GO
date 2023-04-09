@@ -2764,6 +2764,8 @@ func triggerFunctions(l *lua.LState) {
 			ln = lua.LNumber(c.gi().data.attack)
 		case "data.defence":
 			ln = lua.LNumber(c.gi().data.defence)
+		case "data.fall.defence_up":
+			ln = lua.LNumber(c.gi().data.fall.defence_up)
 		case "data.fall.defence_mul":
 			ln = lua.LNumber(1.0 / c.gi().data.fall.defence_mul)
 		case "data.liedown.time":
@@ -3446,6 +3448,19 @@ func triggerFunctions(l *lua.LState) {
 	})
 	luaRegister(l, "prevanim", func(*lua.LState) int {
 		l.Push(lua.LNumber(sys.debugWC.prevAnimNo))
+		return 1
+	})
+	luaRegister(l, "prevmovetype", func(*lua.LState) int {
+		var s string
+		switch sys.debugWC.ss.prevMoveType {
+		case MT_I:
+			s = "I"
+		case MT_A:
+			s = "A"
+		case MT_H:
+			s = "H"
+		}
+		l.Push(lua.LString(s))
 		return 1
 	})
 	luaRegister(l, "prevstateno", func(*lua.LState) int {
